@@ -190,6 +190,15 @@ Make sure you have the fvBot jar or docker image on the machine
 you intend to use for hosting. Also make sure you have you bot token.
 If you don't, you can get one [here](https://discord.com/developers).
 
+You can specify a bot token by creating a `fvbot.properties` file and setting
+the `fvbot.token` property to your token as such:
+
+```properties
+fvbot.token=your.token.here
+```
+
+This must be in the directory from which you are running the bot.
+
 <a id="roadmap"></a>
 
 ## 🗺️ Roadmap

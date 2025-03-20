@@ -4,6 +4,11 @@
       "name": "fvbot.version",
       "type": "java.lang.String",
       "description": "fvBot version"
+    },
+    {
+      "name": "fvbot.token",
+      "type": "java.lang.String",
+      "description": "Discord bot token"
     }
   ]
 }
