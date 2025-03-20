@@ -1,0 +1,9 @@
+{
+  "properties": [
+    {
+      "name": "fvbot.version",
+      "type": "java.lang.String",
+      "description": "fvBot version"
+    }
+  ]
+}

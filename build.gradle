@@ -1,0 +1,62 @@
+import org.apache.tools.ant.filters.ReplaceTokens;
+
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.4.3'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'io.github.hyscript7'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation("net.dv8tion:JDA:5.3.0")
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+	compileOnly 'org.projectlombok:lombok'
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	runtimeOnly 'com.h2database:h2'
+	runtimeOnly 'org.postgresql:postgresql'
+	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+	annotationProcessor 'org.projectlombok:lombok'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
+
+task replaceVersion {
+    doLast {
+        def propsFile = file('src/main/resources/application.properties')
+        def props = new Properties()
+        props.load(new FileInputStream(propsFile))
+
+        // Replace the version placeholder
+        props.setProperty('fvbot.version', version)
+
+        // Write the updated properties back to the file
+        props.store(new FileOutputStream(propsFile), null)
+    }
+}
+
+// Make sure to run this task before building the project
+processResources.dependsOn(replaceVersion)
