@@ -187,7 +187,7 @@ You may need to do a `gradle clean` first in some cases.
 <!-- Bold of you to assume anything I wrote is production ready -->
 
 Make sure you have the fvBot jar or docker image on the machine
-you intend to use for hosting. Also make sure you have you bot token.
+you intend to use for hosting. Also make sure you have your bot token.
 If you don't, you can get one [here](https://discord.com/developers).
 
 You can specify a bot token by creating a `fvbot.properties` file and setting
@@ -287,3 +287,4 @@ I would like to express my deepest gratitude to the following individuals and or
 - [Spring.io](https://spring.io/) - for making development easier.
 - AngrytrashCZ, Spelis and all my other friends - for their invaluable advice
   and troubleshooting help.
+- @SomeKristi - for reading out every file in this repository out loud like a TTS bot, and catching a bunch of oversights and bugs.
