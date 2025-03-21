@@ -133,7 +133,7 @@ and/or prepared:
 ### 📦 Installing dependencies
 
 After you clone the project using git or github cli
-([concrete commands here](http://localhost:6419/CONTRIBUTING.md#development-environment-setup)),
+([concrete commands here](./CONTRIBUTING.md#development-environment-setup)),
 you need to install the project dependencies using the appropriate package manager.
 
 Since this is a gradle project, all you need to do is open it in your IDE
