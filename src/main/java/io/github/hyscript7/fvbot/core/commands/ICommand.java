@@ -2,6 +2,7 @@ package io.github.hyscript7.fvbot.core.commands;
 
 import io.github.hyscript7.fvbot.core.exceptions.commands.CommandException;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.SlashCommandData;
 
 /**
@@ -27,7 +28,9 @@ public interface ICommand {
      *
      * @return the slash command data of the command.
      */
-    SlashCommandData getSlashCommandData();
+    default SlashCommandData getSlashCommandData() {
+        return Commands.slash(getName(), getDescription());
+    }
 
     /**
      * Execute the command.
