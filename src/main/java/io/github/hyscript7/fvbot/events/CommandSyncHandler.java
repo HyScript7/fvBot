@@ -9,7 +9,8 @@ import io.github.hyscript7.fvbot.core.commands.CommandService;
 import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
-import net.dv8tion.jda.api.interactions.commands.Command;
+import net.dv8tion.jda.api.interactions.commands.build.SlashCommandData;
+import net.dv8tion.jda.api.utils.data.DataObject;
 
 @Component
 @Slf4j
@@ -29,25 +30,33 @@ public class CommandSyncHandler extends ListenerAdapter {
      * @return the difference between local and remote commands. 0 means there is no
      *         difference.
      */
-    private long getDifference(List<Command> localCommands, List<Command> remoteCommands) {
-        List<String> allCommandNames = localCommands.stream().map(c -> c.getName()).toList();
-        List<String> syncedCommandNames = remoteCommands.stream().map(c -> c.getName()).toList();
-        long missingOnRemote = allCommandNames.stream().filter(c -> !syncedCommandNames.contains(c)).count();
-        long missingOnLocal = syncedCommandNames.stream().filter(c -> !allCommandNames.contains(c)).count();
+    private long getDifference(List<SlashCommandData> localCommands, List<SlashCommandData> remoteCommands) {
+        List<DataObject> localCommandData = localCommands.stream().map(SlashCommandData::toData).toList();
+        List<DataObject> remoteCommandData = remoteCommands.stream().map(SlashCommandData::toData).toList();
+        log.debug("Local commands: \n"
+                + String.join("\n ", localCommandData.stream().map(DataObject::toPrettyString).toList()));
+        log.debug("Remote commands: \n"
+                + String.join("\n ", remoteCommandData.stream().map(DataObject::toPrettyString).toList()));
+        long missingOnRemote = localCommandData.stream().filter(c -> !remoteCommandData.contains(c)).count();
+        long missingOnLocal = remoteCommandData.stream().filter(c -> !localCommandData.contains(c)).count();
         return missingOnRemote + missingOnLocal;
     }
 
     @Override
     public void onReady(@NotNull ReadyEvent event) {
-        List<Command> localCommands = commandService.getCommands().stream()
-                .map(c -> (Command) c.getSlashCommandData()).toList();
+        List<SlashCommandData> localCommands = commandService.getCommands().stream()
+                .map(c -> (SlashCommandData) c.getSlashCommandData()).toList();
 
         event.getJDA().retrieveCommands().onSuccess(syncedCommands -> {
-            long difference = getDifference(localCommands, syncedCommands);
+            List<SlashCommandData> remoteCommands = syncedCommands.stream().map(SlashCommandData::fromCommand).toList();
+
+            long difference = getDifference(localCommands, remoteCommands);
             if (difference > 0l) {
                 // Sync the commands globally.
                 log.info("Syncing commands with a difference of {} commands", difference);
                 commandService.syncCommands(event.getJDA());
+            } else {
+                log.info("Commands are up-to-date!");
             }
         }).queue();
     }
