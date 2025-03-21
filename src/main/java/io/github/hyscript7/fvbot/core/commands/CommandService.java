@@ -70,6 +70,7 @@ public class CommandService {
             event.deferReply(command.prefersEphemeral()).queue();
             try {
                 command.execute(event);
+                log.info("Command " + command.getName() + " has finished execution successfully.");
             } catch (CommandException e) {
                 log.error("Error executing command " + command.getName(), e);
                 handleCommandError(event, e);
