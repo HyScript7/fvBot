@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.lang.Nullable;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -40,7 +41,7 @@ public class User {
     @JoinColumn(name = "current_character_id", nullable = true)
     private @Nullable Character currentCharacter;
 
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "UserTitleGrant", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "title_id"))
     private List<Title> titles;
 

@@ -9,6 +9,8 @@ import io.github.hyscript7.fvbot.data.models.Character;
 import io.github.hyscript7.fvbot.data.models.User;
 
 public interface CharacterRepository extends Repository<Character, Long> {
+    Optional<Character> findById(Long id);
+
     Character save(Character character);
 
     void delete(Character character);

@@ -12,6 +12,8 @@ public interface TitleRepository extends Repository<Title, Long> {
 
     void delete(Title title);
 
+    Optional<Title> findById(Long id);
+
     Optional<Title> findByPrefixAndSuffix(String prefix, String suffix);
 
     List<Title> findAll();

@@ -1,5 +1,6 @@
 package io.github.hyscript7.fvbot.services;
 
+import java.util.List;
 import java.util.Optional;
 import io.github.hyscript7.fvbot.data.models.Character;
 import io.github.hyscript7.fvbot.data.repositories.CharacterRepository;
@@ -17,6 +18,23 @@ public class CharacterService {
         this.characterRepository = characterRepository;
     }
 
+    public Optional<Character> getCharacterById(Long id) {
+        return characterRepository.findById(id);
+    }
+
+    public List<Character> getCharactersOfUser(User user) {
+        return characterRepository.findByUser(user);
+    }
+
+    public void updateCharacter(Character character) {
+        characterRepository.save(character);
+    }
+
+    public void updateInnateName(Character character, String innateName) {
+        character.setInnateName(innateName);
+        characterRepository.save(character);
+    }
+
     public void setCharacterTitle(Character character, Title title) {
         character.setTitle(title);
         characterRepository.save(character);
@@ -30,5 +48,5 @@ public class CharacterService {
         character.setUser(user);
         return characterRepository.save(character);
     }
-    
+
 }
