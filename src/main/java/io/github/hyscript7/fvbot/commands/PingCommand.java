@@ -13,8 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 @Slf4j
 public class PingCommand implements ICommand {
-    private final String name = "ping";
-    private final String description = "Responds with the current API lantency in miliseconds.";
+    private static final String NAME = "ping";
+    private static final String DESCRIPTION = "Responds with the current API lantency in miliseconds.";
 
     private IEmbedProvider embedProvider;
 
@@ -24,12 +24,12 @@ public class PingCommand implements ICommand {
 
     @Override
     public String getName() {
-        return name;
+        return NAME;
     }
 
     @Override
     public String getDescription() {
-        return description;
+        return DESCRIPTION;
     }
 
     @Override
