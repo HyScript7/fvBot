@@ -57,6 +57,9 @@ public class Character {
     }
 
     public String getFullNameWithTitle() {
+        if (title == null) {
+            return getFullName();
+        }
         String prefix = title.getPrefix() == null ? "" : title.getPrefix();
         String suffix = title.getSuffix() == null ? "" : title.getSuffix();
         return prefix + firstName + " " + lastName + suffix;

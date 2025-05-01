@@ -6,7 +6,8 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.stereotype.Component;
-
+import io.github.hyscript7.fvbot.config.EmbedProviderConfig;
+import io.github.hyscript7.fvbot.core.embeds.IEmbedProvider;
 import io.github.hyscript7.fvbot.data.models.Character;
 import io.github.hyscript7.fvbot.data.models.Title;
 import io.github.hyscript7.fvbot.data.models.User;
@@ -38,6 +39,8 @@ import net.dv8tion.jda.api.interactions.modals.Modal;
 @Slf4j
 public class OnMemberJoinListener extends ListenerAdapter {
 
+    private final IEmbedProvider defaultEmbedProvider;
+
     private final TitleService titleService;
 
     private final InnateNameService innateNameService;
@@ -68,12 +71,13 @@ public class OnMemberJoinListener extends ListenerAdapter {
 
     public OnMemberJoinListener(FvBotConfigurationService fvBotConfigurationService, UserService userService,
             CharacterService characterService, InnateNameService innateNameService,
-            TitleService titleService) {
+            TitleService titleService, IEmbedProvider defaultEmbedProvider) {
         this.fvBotConfigurationService = fvBotConfigurationService;
         this.userService = userService;
         this.characterService = characterService;
         this.innateNameService = innateNameService;
         this.titleService = titleService;
+        this.defaultEmbedProvider = defaultEmbedProvider;
     }
 
     @Override
@@ -153,7 +157,8 @@ public class OnMemberJoinListener extends ListenerAdapter {
                 + "!\nClick the button below to begin your onboarding.";
         isolateChannel(channel.getGuild(), discordUser, channel);
         grantUserIsolatedRole(discordUser);
-        channel.sendMessage(messageContent).setComponents(ActionRow.of(button)).queue();
+        channel.sendMessageEmbeds(getEmbedProvider().getPrettyEmbedBuilder(discordUser.getJDA().getSelfUser())
+                .setDescription(messageContent).build()).setComponents(ActionRow.of(button)).queue();
     }
 
     @Override
@@ -231,7 +236,9 @@ public class OnMemberJoinListener extends ListenerAdapter {
         } else {
             messageContent = "Before you may access the server, you must create a character.";
         }
-        event.editMessage(messageContent).setComponents(ActionRow.of(components)).queue();
+        event.editMessageEmbeds(
+                getEmbedProvider().getPrettyEmbedBuilder(member.getJDA().getSelfUser()).setDescription(messageContent).build())
+                .setComponents(ActionRow.of(components)).queue();
     }
 
     private void handleExistingCharacterButton(ButtonInteractionEvent event, Message message, Member member,
@@ -243,7 +250,8 @@ public class OnMemberJoinListener extends ListenerAdapter {
         characters.forEach(character -> selectMenuBuilder.addOption(
                 character.getFullName() + " (" + character.getInnateName() + ")", getLongAsHex(character.getId())));
         selectMenuBuilder.addOption("Abort (Return)", CHARACTER_SELECT_DROPDOWN_ABORT_VALUE);
-        event.editMessage("Select your character to proceed.")
+        event.editMessageEmbeds(getEmbedProvider().getPrettyEmbedBuilder(member.getJDA().getSelfUser())
+                .setDescription("Select your desired character to proceed.").build())
                 .setComponents(ActionRow.of(selectMenuBuilder.build()))
                 .queue();
     }
@@ -260,14 +268,16 @@ public class OnMemberJoinListener extends ListenerAdapter {
         }
         Optional<Character> character = characterService.getCharacterById(Long.parseLong(selectedCharacterId, 16));
         if (!character.isPresent()) {
-            event.editMessage("Character not found. Please try again.").queue();
+            event.editMessageEmbeds(getEmbedProvider().getPrettyEmbedBuilder(member.getJDA().getSelfUser()).setDescription(
+                    "Character not found. Please try again.\nMaybe an admin deleted it while you were choosing?")
+                    .setColor(0xFF0000).build()).queue();
             return;
         }
         Character selectedCharacter = character.get();
         userService.setCurrentCharacter(user, selectedCharacter);
 
         userService.setCurrentCharacter(user, selectedCharacter);
-        offerTitleOrFinalize(event, message, member, user);
+        finishOnBoarding(event, message, member, user);
     }
 
     private void handleCreateCharacterButton(ButtonInteractionEvent event, Message message, Member member, User user) {
@@ -293,13 +303,16 @@ public class OnMemberJoinListener extends ListenerAdapter {
         characterService.createCharacter(user, character);
         userService.setCurrentCharacter(user, character); // Equip the character so that we can identify it later in
                                                           // other interactions
-        sendInnateNameOffer(event, innateName);
+        sendInnateNameOffer(event, member, innateName);
     }
 
-    private void sendInnateNameOffer(IMessageEditCallback event, String innateName) {
+    private void sendInnateNameOffer(IMessageEditCallback event, Member member, String innateName) {
         Button acceptButton = Button.success(CHARACTER_CREATION_ACCEPT_INNATE_NAME_BUTTON_COMPONENT_ID, "Accept");
         Button rerollButton = Button.danger(CHARACTER_CREATION_REROLL_INNATE_NAME_BUTTON_COMPONENT_ID, "Reroll");
-        event.editMessage("Now choose an innate name you like.\nHow does\n```\n" + innateName + "\n```\nsound?")
+        event.editMessageEmbeds(getEmbedProvider().getPrettyEmbedBuilder(member.getJDA().getSelfUser())
+                .setDescription("Now choose an innate name that you like.\nHow does\n```\n" + innateName
+                        + "\n```\nsound to you?")
+                .build())
                 .setComponents(ActionRow.of(acceptButton, rerollButton)).queue();
     }
 
@@ -312,7 +325,7 @@ public class OnMemberJoinListener extends ListenerAdapter {
         String innateName = innateNameService.generateInnateName(RANDOM_INNATE_NAME_MIN_LENGTH,
                 RANDOM_INNATE_NAME_MAX_LENGTH);
         characterService.updateInnateName(character.get(), innateName);
-        sendInnateNameOffer(event, innateName);
+        sendInnateNameOffer(event, member, innateName);
     }
 
     private void handleInnateNameAcceptButton(ButtonInteractionEvent event, Message message, Member member, User user) {
@@ -346,7 +359,8 @@ public class OnMemberJoinListener extends ListenerAdapter {
         allTitles.forEach(title -> selectMenuBuilder.addOption(getTitlePreview(title, character.get()),
                 getLongAsHex(title.getId())));
         selectMenuBuilder.addOption("None", TITLE_SELECT_DROPDOWN_NONE_VALUE);
-        event.editMessage("Select your preferred title.")
+        event.editMessageEmbeds(getEmbedProvider().getPrettyEmbedBuilder(member.getJDA().getSelfUser())
+                .setDescription("Select your desired title to proceed.").build())
                 .setComponents(ActionRow.of(selectMenuBuilder.build()))
                 .queue();
     }
@@ -365,7 +379,10 @@ public class OnMemberJoinListener extends ListenerAdapter {
         }
         Optional<Title> title = titleService.getTitleById(Long.parseLong(selectedTitleId, 16));
         if (!title.isPresent()) {
-            event.editMessage("Title not found. Please try again.\nMaybe an admin deleted it while you were choosing?")
+            event.editMessageEmbeds(getEmbedProvider().getPrettyEmbedBuilder(member.getJDA().getSelfUser())
+                    .setDescription(
+                            "Title not found. Please try again.\nMaybe an admin deleted it while you were choosing?")
+                    .setColor(0xFF0000).build())
                     .queue();
             return;
         }
@@ -380,9 +397,10 @@ public class OnMemberJoinListener extends ListenerAdapter {
             handleInitializeOnBoardingButton(event, message, member, user);
             return;
         }
-        event.editMessage("Finalizing with selected character: " + character.get().getFullNameWithTitle() + " ("
-                + character.get().getInnateName() + ") [Lv. " + character.get().getLevel() + " 🌟"
-                + character.get().getResurrection() + "]").setComponents().queue();
+        event.editMessageEmbeds(getEmbedProvider().getPrettyEmbedBuilder(member.getJDA().getSelfUser())
+                .setDescription("You're all set up!\nHope you enjoy your stay, "
+                        + character.get().getFullNameWithTitle() + "!\n-# This channel will be deleted momentarily.")
+                .build()).setComponents().queue();
         grantUserMemberRole(member);
         member.getGuild().modifyNickname(member, character.get().discordFullName()).queue();
         message.getChannel().delete().queueAfter(5, TimeUnit.SECONDS);
@@ -481,6 +499,10 @@ public class OnMemberJoinListener extends ListenerAdapter {
             member.getGuild().removeRoleFromMember(member, getIsolatedRole(member.getGuild())).queue();
         }
         member.getGuild().addRoleToMember(member, getMemberRole(member.getGuild())).queue();
+    }
+
+    private IEmbedProvider getEmbedProvider()  {
+        return defaultEmbedProvider;
     }
 
 }
