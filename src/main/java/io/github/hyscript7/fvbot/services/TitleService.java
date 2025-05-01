@@ -6,6 +6,7 @@ import io.github.hyscript7.fvbot.data.repositories.UserRepository;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
@@ -24,6 +25,10 @@ public class TitleService {
             TitleRepository titleRepository) {
         this.characterRepository = characterRepository;
         this.titleRepository = titleRepository;
+    }
+
+    public Optional<Title> getTitleById(Long id) {
+        return titleRepository.findById(id);
     }
 
     public List<Title> getCharacterTitles(Character character) {

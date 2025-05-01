@@ -50,4 +50,21 @@ public class Character {
     @ManyToOne
     @JoinColumn(name = "user_id")
     private User user;
+
+    public String getFullName() {
+        return firstName + " " + lastName;
+    }
+
+    public String getFullNameWithTitle() {
+        if (title == null) {
+            return getFullName();
+        }
+        if (title.getSuffix() == null) {
+            return title.getPrefix() + getFullName();
+        }
+        if (title.getPrefix() == null) {
+            return getFullName() + title.getSuffix();
+        }
+        return title.getPrefix() + getFullName() + title.getSuffix();
+    }
 }
