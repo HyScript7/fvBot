@@ -18,6 +18,7 @@ CREATE TABLE
         last_name VARCHAR(255),
         innate_name VARCHAR(255),
         title_id BIGINT,
+        resurrection INTEGER,
         level INTEGER,
         experience DOUBLE,
         user_id BIGINT

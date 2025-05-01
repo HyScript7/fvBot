@@ -39,6 +39,7 @@ public class Character {
     @ManyToOne
     @JoinColumn(name = "title_id", nullable = true)
     private @Nullable Title title;
+    private Integer resurrection;
     private Integer level;
     private Double experience;
 

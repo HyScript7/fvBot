@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS "Character" (
     "last_name" VARCHAR(255),
     "innate_name" VARCHAR(255),
     "title_id" BIGINT,
+    "resurrection" INTEGER,
     "level" INTEGER,
     "experience" DOUBLE PRECISION,
     "user_id" BIGINT
