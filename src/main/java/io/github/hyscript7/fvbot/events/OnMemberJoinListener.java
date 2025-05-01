@@ -2,29 +2,45 @@ package io.github.hyscript7.fvbot.events;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import org.springframework.stereotype.Component;
 
+import io.github.hyscript7.fvbot.data.models.Character;
+import io.github.hyscript7.fvbot.data.models.Title;
 import io.github.hyscript7.fvbot.data.models.User;
-import io.github.hyscript7.fvbot.services.CharacterService;
-import io.github.hyscript7.fvbot.services.FvBotConfigurationService;
-import io.github.hyscript7.fvbot.services.UserService;
+import io.github.hyscript7.fvbot.services.*;
 import lombok.extern.slf4j.Slf4j;
+import net.dv8tion.jda.api.Permission;
+import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.channel.concrete.Category;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent;
 import net.dv8tion.jda.api.events.guild.member.GuildMemberRemoveEvent;
+import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
+import net.dv8tion.jda.api.interactions.callbacks.IMessageEditCallback;
 import net.dv8tion.jda.api.interactions.components.ActionRow;
 import net.dv8tion.jda.api.interactions.components.ItemComponent;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
+import net.dv8tion.jda.api.interactions.components.selections.StringSelectMenu;
+import net.dv8tion.jda.api.interactions.components.text.TextInput;
+import net.dv8tion.jda.api.interactions.components.text.TextInputStyle;
+import net.dv8tion.jda.api.interactions.modals.Modal;
 
 @Component
 @Slf4j
 public class OnMemberJoinListener extends ListenerAdapter {
+
+    private final TitleService titleService;
+
+    private final InnateNameService innateNameService;
 
     private final CharacterService characterService;
 
@@ -32,15 +48,32 @@ public class OnMemberJoinListener extends ListenerAdapter {
 
     private final FvBotConfigurationService fvBotConfigurationService;
     private static final String CHAMBERS_CHANNEL_PREFIX = "chamber-";
-    private static final String ONBOARDING_BUTTON_PREFIX = "onboarding-";
-    private static final String CHARACTER_SELECT_BUTTON_PREFIX = "character-select-";
-    private static final String CHARACTER_CREATE_BUTTON_PREFIX = "character-create-";
+    private static final String ONBOARDING_BUTTON_COMPONENT_ID = "onboarding";
+    private static final String CHARACTER_SELECT_BUTTON_COMPONENT_ID = "character-select";
+    private static final String CHARACTER_CREATE_BUTTON_COMPONENT_ID = "character-create";
+    private static final String CHARACTER_SELECT_DROPDOWN_COMPONENT_ID = "character-select-dropdown";
+    private static final String CHARACTER_SELECT_DROPDOWN_ABORT_VALUE = "abort"; // Since we only otherwise deal with
+                                                                                 // hex values in this dropdown's
+                                                                                 // values, it's safe to use the word
+                                                                                 // 'abort'.
+    private static final String FULL_NAME_TEXT_INPUT_COMPONENT_ID = "creation-modal:first-name";
+    private static final String CHARACTER_CREATION_MODAL_ID = "character-creation-modal";
+    private static final String CHARACTER_CREATION_REROLL_INNATE_NAME_BUTTON_COMPONENT_ID = "character-reroll-innate-name";
+    private static final String CHARACTER_CREATION_ACCEPT_INNATE_NAME_BUTTON_COMPONENT_ID = "character-accept-innate-name";
+    private static final String TITLE_SELECT_DROPDOWN_COMPONENT_ID = "character-creation-title-select-dropdown";
+    private static final String TITLE_SELECT_DROPDOWN_NONE_VALUE = "none";
+
+    private static final int RANDOM_INNATE_NAME_MIN_LENGTH = 4;
+    private static final int RANDOM_INNATE_NAME_MAX_LENGTH = 9;
 
     public OnMemberJoinListener(FvBotConfigurationService fvBotConfigurationService, UserService userService,
-            CharacterService characterService) {
+            CharacterService characterService, InnateNameService innateNameService,
+            TitleService titleService) {
         this.fvBotConfigurationService = fvBotConfigurationService;
         this.userService = userService;
         this.characterService = characterService;
+        this.innateNameService = innateNameService;
+        this.titleService = titleService;
     }
 
     @Override
@@ -75,18 +108,22 @@ public class OnMemberJoinListener extends ListenerAdapter {
             return;
         }
 
-        // Unset the user's current character, so that they can re-enter the onboarding
-        // if they rejoin.
-        userService.setCurrentCharacter(userService.getOrCreateUser(event.getUser().getIdLong()), null);
-
         String channelName = getChambersChannelName(event.getUser().getName());
 
         // Clean up any relevant chambers realm channels on member leave
         category.getTextChannels().stream().filter(channel -> channel.getName().equals(channelName))
                 .forEach(channel -> {
                     channel.delete().reason("Member left the server.").queue();
-                    log.info("Cleaned up chambers realm channel {} due to member leaving the server.", channel.getName());
+                    log.info("Cleaned up chambers realm channel {} ({}) due to member leaving the server.",
+                            channel.getName(), channel.getId());
                 });
+
+        // Unset the user's current character, so that they can re-enter the onboarding
+        // if they rejoin.
+        User user = userService.getOrCreateUser(event.getUser().getIdLong());
+        if (userService.getSelectedCharacter(user).isPresent()) {
+            userService.setCurrentCharacter(user, null);
+        }
     }
 
     /**
@@ -110,12 +147,13 @@ public class OnMemberJoinListener extends ListenerAdapter {
      */
     public void initializeOnBoarding(Member discordUser, TextChannel channel) {
         // This method is public so that it can be artificially triggered through admin
-        // slash
-        // commands.
-        Button button = Button.success(buttonIdFor(ONBOARDING_BUTTON_PREFIX, discordUser.getIdLong()), "Begin");
+        // slash commands.
+        Button button = Button.success(ONBOARDING_BUTTON_COMPONENT_ID, "Begin");
         String messageContent = "Welcome to the chambers realm, " + discordUser.getUser().getName()
                 + "!\nClick the button below to begin your onboarding.";
-        channel.sendMessage(messageContent).addActionRow(button).queue();
+        isolateChannel(channel.getGuild(), discordUser, channel);
+        grantUserIsolatedRole(discordUser);
+        channel.sendMessage(messageContent).setComponents(ActionRow.of(button)).queue();
     }
 
     @Override
@@ -133,28 +171,62 @@ public class OnMemberJoinListener extends ListenerAdapter {
             return;
         }
         User user = userService.getOrCreateUser(member.getIdLong());
-        // We need to split by the last - to get the button id
-        // e.g. ONBOARDING_BUTTON_PREFIX + getLongAsHex(member.getIdLong())
-        // Since we can get the user id hex, we can split by that
-        String userIdHex = getLongAsHex(member.getIdLong());
-        String buttonId = event.getComponentId().split(userIdHex)[0];
-        switch (buttonId) {
-            case ONBOARDING_BUTTON_PREFIX -> handleInitializeOnBoardingButton(event, message, member, user);
-            case CHARACTER_SELECT_BUTTON_PREFIX -> handleExistingCharacterButton(event, message, member, user);
-            case CHARACTER_CREATE_BUTTON_PREFIX -> handleCreateCharacterButton(event, message, member, user);
+        switch (event.getComponentId()) {
+            case ONBOARDING_BUTTON_COMPONENT_ID -> handleInitializeOnBoardingButton(event, message, member, user);
+            case CHARACTER_SELECT_BUTTON_COMPONENT_ID -> handleExistingCharacterButton(event, message, member, user);
+            case CHARACTER_CREATE_BUTTON_COMPONENT_ID -> handleCreateCharacterButton(event, message, member, user);
+            case CHARACTER_CREATION_REROLL_INNATE_NAME_BUTTON_COMPONENT_ID ->
+                handleInnateNameRerollButton(event, message, member, user);
+            case CHARACTER_CREATION_ACCEPT_INNATE_NAME_BUTTON_COMPONENT_ID ->
+                handleInnateNameAcceptButton(event, message, member, user);
         }
     }
 
-    private void handleInitializeOnBoardingButton(ButtonInteractionEvent event, Message message, Member member,
+    @Override
+    public void onStringSelectInteraction(StringSelectInteractionEvent event) {
+        // This is the exact same thing as a button interaction, but with a dropdown.
+        if (event.getGuild() == null) {
+            return;
+        }
+        Message message = event.getMessage();
+        Member member = event.getMember();
+        if (member == null) {
+            return;
+        }
+        User user = userService.getOrCreateUser(member.getIdLong());
+        switch (event.getComponentId()) {
+            case CHARACTER_SELECT_DROPDOWN_COMPONENT_ID -> handleCharacterSelectDropdown(event, message, member, user);
+            case TITLE_SELECT_DROPDOWN_COMPONENT_ID -> handleTitleSelectionDropdown(event, message, member, user);
+        }
+    }
+
+    @Override
+    public void onModalInteraction(ModalInteractionEvent event) {
+        // This is the exact same thing as a button interaction, but with a dropdown.
+        if (event.getGuild() == null) {
+            return;
+        }
+        Message message = event.getMessage();
+        Member member = event.getMember();
+        if (member == null) {
+            return;
+        }
+        User user = userService.getOrCreateUser(member.getIdLong());
+        switch (event.getModalId()) {
+            case CHARACTER_CREATION_MODAL_ID -> handleCharacterCreationModalSubmission(event, message, member, user);
+        }
+    }
+
+    private void handleInitializeOnBoardingButton(IMessageEditCallback event, Message message, Member member,
             User user) {
         String messageContent;
         List<ItemComponent> components = new ArrayList<>(2);
-        components.add(Button.success(buttonIdFor(CHARACTER_CREATE_BUTTON_PREFIX, member.getIdLong()),
+        components.add(Button.success(CHARACTER_CREATE_BUTTON_COMPONENT_ID,
                 "Create New Character"));
         // If the user has characters, we also add a character select button.
         if (userService.hasCharacters(user)) {
             messageContent = "Before you may access the server, you must choose or create a character.";
-            components.add(Button.primary(buttonIdFor(CHARACTER_SELECT_BUTTON_PREFIX, member.getIdLong()),
+            components.add(Button.primary(CHARACTER_SELECT_BUTTON_COMPONENT_ID,
                     "Select Existing Character"));
         } else {
             messageContent = "Before you may access the server, you must create a character.";
@@ -162,21 +234,175 @@ public class OnMemberJoinListener extends ListenerAdapter {
         event.editMessage(messageContent).setComponents(ActionRow.of(components)).queue();
     }
 
-    private void handleCreateCharacterButton(ButtonInteractionEvent event, Message message, Member member, User user) {
-        event.editMessage("Character creation not yet implemented.").setComponents().queue();
-    }
-
     private void handleExistingCharacterButton(ButtonInteractionEvent event, Message message, Member member,
             User user) {
-        event.editMessage("Character selection not yet implemented.").setComponents().queue();
+        List<Character> characters = characterService.getCharactersOfUser(user);
+        // ! SelectMenu supports only up to 25 options. Implement pagination later.
+        StringSelectMenu.Builder selectMenuBuilder = StringSelectMenu
+                .create(CHARACTER_SELECT_DROPDOWN_COMPONENT_ID).setRequiredRange(1, 1);
+        characters.forEach(character -> selectMenuBuilder.addOption(
+                character.getFullName() + " (" + character.getInnateName() + ")", getLongAsHex(character.getId())));
+        selectMenuBuilder.addOption("Abort (Return)", CHARACTER_SELECT_DROPDOWN_ABORT_VALUE);
+        event.editMessage("Select your character to proceed.")
+                .setComponents(ActionRow.of(selectMenuBuilder.build()))
+                .queue();
+    }
+
+    private void handleCharacterSelectDropdown(StringSelectInteractionEvent event, Message message, Member member,
+            User user) {
+        String selectedCharacterId = event.getValues().get(0);
+        if (selectedCharacterId.equals(CHARACTER_SELECT_DROPDOWN_ABORT_VALUE)) {
+            // This is a hack that abuses the fact that the initializeOnboardingButton event
+            // only really depends on a messageEdit event.
+            // It is for this reason it was written that way.
+            handleInitializeOnBoardingButton(event, message, member, user);
+            return;
+        }
+        Optional<Character> character = characterService.getCharacterById(Long.parseLong(selectedCharacterId, 16));
+        if (!character.isPresent()) {
+            event.editMessage("Character not found. Please try again.").queue();
+            return;
+        }
+        Character selectedCharacter = character.get();
+        userService.setCurrentCharacter(user, selectedCharacter);
+
+        userService.setCurrentCharacter(user, selectedCharacter);
+        offerTitleOrFinalize(event, message, member, user);
+    }
+
+    private void handleCreateCharacterButton(ButtonInteractionEvent event, Message message, Member member, User user) {
+        Modal modal = getCharacterCreationModal();
+        event.replyModal(modal).queue();
+    }
+
+    private void handleCharacterCreationModalSubmission(ModalInteractionEvent event, Message message, Member member,
+            User user) {
+        if (!event.getModalId().equals(CHARACTER_CREATION_MODAL_ID)) {
+            log.error(
+                    "Received unexpected modal interaction at handle level: {} (handleCharacterCreationModalSubmission)",
+                    event.getModalId());
+            return;
+        }
+        String fullName = event.getValue(FULL_NAME_TEXT_INPUT_COMPONENT_ID).getAsString();
+        String firstName = fullName.split(" ")[0];
+        String lastName = fullName.split(" ")[1];
+        String innateName = innateNameService.generateInnateName(RANDOM_INNATE_NAME_MIN_LENGTH,
+                RANDOM_INNATE_NAME_MAX_LENGTH);
+        Character character = getDefaultCharacterBuilder().firstName(firstName).lastName(lastName)
+                .innateName(innateName).user(user).build();
+        characterService.createCharacter(user, character);
+        userService.setCurrentCharacter(user, character); // Equip the character so that we can identify it later in
+                                                          // other interactions
+        sendInnateNameOffer(event, innateName);
+    }
+
+    private void sendInnateNameOffer(IMessageEditCallback event, String innateName) {
+        Button acceptButton = Button.success(CHARACTER_CREATION_ACCEPT_INNATE_NAME_BUTTON_COMPONENT_ID, "Accept");
+        Button rerollButton = Button.danger(CHARACTER_CREATION_REROLL_INNATE_NAME_BUTTON_COMPONENT_ID, "Reroll");
+        event.editMessage("Now choose an innate name you like.\nHow does\n```\n" + innateName + "\n```\nsound?")
+                .setComponents(ActionRow.of(acceptButton, rerollButton)).queue();
+    }
+
+    private void handleInnateNameRerollButton(ButtonInteractionEvent event, Message message, Member member, User user) {
+        Optional<Character> character = userService.getSelectedCharacter(user);
+        if (character.isEmpty()) {
+            handleInitializeOnBoardingButton(event, message, member, user);
+            return;
+        }
+        String innateName = innateNameService.generateInnateName(RANDOM_INNATE_NAME_MIN_LENGTH,
+                RANDOM_INNATE_NAME_MAX_LENGTH);
+        characterService.updateInnateName(character.get(), innateName);
+        sendInnateNameOffer(event, innateName);
+    }
+
+    private void handleInnateNameAcceptButton(ButtonInteractionEvent event, Message message, Member member, User user) {
+        Optional<Character> character = userService.getSelectedCharacter(user);
+        if (character.isEmpty()) {
+            handleInitializeOnBoardingButton(event, message, member, user);
+            return;
+        }
+        Character selectedCharacter = character.get();
+        userService.setCurrentCharacter(user, selectedCharacter);
+        offerTitleOrFinalize(event, message, member, user);
+    }
+
+    private void offerTitleOrFinalize(IMessageEditCallback event, Message message, Member member, User user) {
+        Optional<Character> character = userService.getSelectedCharacter(user);
+        if (character.isEmpty()) {
+            handleInitializeOnBoardingButton(event, message, member, user);
+            return;
+        }
+        List<Title> characterBoundTitles = titleService.getCharacterTitles(character.get());
+        List<Title> userBoundTitles = titleService.getUserTitles(user);
+        List<Title> allTitles = new ArrayList<>(characterBoundTitles);
+        allTitles.addAll(userBoundTitles);
+        if (allTitles.isEmpty()) {
+            log.info("User " + member.getId() + " has no titles. Proceeding to finalization.");
+            finishOnBoarding(event, message, member, user);
+            return;
+        }
+        StringSelectMenu.Builder selectMenuBuilder = StringSelectMenu.create(TITLE_SELECT_DROPDOWN_COMPONENT_ID)
+                .setRequiredRange(1, 1);
+        allTitles.forEach(title -> selectMenuBuilder.addOption(getTitlePreview(title, character.get()),
+                getLongAsHex(title.getId())));
+        selectMenuBuilder.addOption("None", TITLE_SELECT_DROPDOWN_NONE_VALUE);
+        event.editMessage("Select your preferred title.")
+                .setComponents(ActionRow.of(selectMenuBuilder.build()))
+                .queue();
+    }
+
+    private void handleTitleSelectionDropdown(StringSelectInteractionEvent event, Message message, Member member,
+            User user) {
+        Optional<Character> character = userService.getSelectedCharacter(user);
+        if (character.isEmpty()) {
+            handleInitializeOnBoardingButton(event, message, member, user);
+            return;
+        }
+        String selectedTitleId = event.getValues().get(0);
+        if (selectedTitleId.equals(TITLE_SELECT_DROPDOWN_NONE_VALUE)) {
+            finishOnBoarding(event, message, member, user);
+            return;
+        }
+        Optional<Title> title = titleService.getTitleById(Long.parseLong(selectedTitleId, 16));
+        if (!title.isPresent()) {
+            event.editMessage("Title not found. Please try again.\nMaybe an admin deleted it while you were choosing?")
+                    .queue();
+            return;
+        }
+        character.get().setTitle(title.get());
+        characterService.updateCharacter(character.get());
+        finishOnBoarding(event, message, member, user);
+    }
+
+    private void finishOnBoarding(IMessageEditCallback event, Message message, Member member, User user) {
+        Optional<Character> character = userService.getSelectedCharacter(user);
+        if (character.isEmpty()) {
+            handleInitializeOnBoardingButton(event, message, member, user);
+            return;
+        }
+        event.editMessage("Finalizing with selected character: " + character.get().getFullNameWithTitle() + " ("
+                + character.get().getInnateName() + ") [Lv. " + character.get().getLevel() + " 🌟"
+                + character.get().getResurrection() + "]").setComponents().queue();
+        grantUserMemberRole(member);
+        member.getGuild().modifyNickname(member, character.get().discordFullName()).queue();
+        message.getChannel().delete().queueAfter(5, TimeUnit.SECONDS);
     }
 
     private String getLongAsHex(long id) {
         return Long.toHexString(id);
     }
 
-    private String buttonIdFor(String prefix, long userId) {
-        return prefix + getLongAsHex(userId);
+    private Modal getCharacterCreationModal() {
+        TextInput fullName = TextInput.create(FULL_NAME_TEXT_INPUT_COMPONENT_ID, "Full Name", TextInputStyle.SHORT)
+                .setRequired(true).build();
+        return Modal.create(CHARACTER_CREATION_MODAL_ID, "Character Creation")
+                .addComponents(ActionRow.of(fullName)).build();
+    }
+
+    private String getTitlePreview(Title title, Character character) {
+        String prefix = title.getPrefix() == null ? "" : title.getPrefix();
+        String suffix = title.getSuffix() == null ? "" : title.getSuffix();
+        return prefix + character.getFirstName().charAt(0) + character.getLastName().charAt(0) + suffix;
     }
 
     /**
@@ -195,6 +421,66 @@ public class OnMemberJoinListener extends ListenerAdapter {
             channelName = channelName.substring(0, 100);
         }
         return channelName;
+    }
+
+    /**
+     * Provides a default character builder initialized with standard starting
+     * attributes for a new character.
+     *
+     * @return a CharacterBuilder with level set to 1, resurrection set to 0,
+     *         and experience set to 0.0.
+     */
+    private Character.CharacterBuilder getDefaultCharacterBuilder() {
+        return Character.builder().level(1).resurrection(0).experience(0.0);
+    }
+
+    private Role getIsolatedRole(Guild guild) {
+        return guild.getRoleById(fvBotConfigurationService.getIsolatedRoleId());
+    }
+
+    private Role getMemberRole(Guild guild) {
+        return guild.getRoleById(fvBotConfigurationService.getMemberRoleId());
+    }
+
+    /**
+     * Isolates a given TextChannel by removing the VIEW_CHANNEL and MESSAGE_SEND
+     * permissions from the public role and adding the VIEW_CHANNEL permission
+     * for the given member. This is used to create a channel that only the
+     * member can see.
+     *
+     * @param guild   The guild that the channel is in.
+     * @param member  The member that should be able to see the channel.
+     * @param channel The channel to isolate.
+     */
+    private void isolateChannel(Guild guild, Member member, TextChannel channel) {
+        channel.upsertPermissionOverride(guild.getPublicRole())
+                .setDenied(Permission.VIEW_CHANNEL, Permission.MESSAGE_SEND).queue();
+        channel.upsertPermissionOverride(member).setAllowed(Permission.VIEW_CHANNEL).queue();
+    }
+
+    /**
+     * Grants the isolated role to the given member. This role is used to prevent
+     * users from seeing the onboarding channels until they have completed the
+     * onboarding process. This method is used to add the isolated role to a user
+     * when they join the server.
+     *
+     * @param member The guild member to whom the isolated role should be granted.
+     */
+    private void grantUserIsolatedRole(Member member) {
+        member.getGuild().addRoleToMember(member, getIsolatedRole(member.getGuild())).queue();
+    }
+
+    /**
+     * Grants the member role to the given member by removing the isolated role,
+     * if present, and adding the member role.
+     *
+     * @param member The guild member to whom the member role should be granted.
+     */
+    private void grantUserMemberRole(Member member) {
+        if (member.getRoles().contains(getIsolatedRole(member.getGuild()))) {
+            member.getGuild().removeRoleFromMember(member, getIsolatedRole(member.getGuild())).queue();
+        }
+        member.getGuild().addRoleToMember(member, getMemberRole(member.getGuild())).queue();
     }
 
 }

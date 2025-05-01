@@ -2,7 +2,6 @@ package io.github.hyscript7.fvbot.services;
 
 import io.github.hyscript7.fvbot.data.repositories.CharacterRepository;
 import io.github.hyscript7.fvbot.data.repositories.TitleRepository;
-import io.github.hyscript7.fvbot.data.repositories.UserRepository;
 
 import java.util.ArrayList;
 import java.util.List;
