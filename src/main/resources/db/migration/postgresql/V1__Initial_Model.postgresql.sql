@@ -30,11 +30,11 @@ CREATE TABLE IF NOT EXISTS "title" (
 );
 
 -- N:N Join Tables
-CREATE TABLE IF NOT EXISTS "usertitlegrant" (
+CREATE TABLE IF NOT EXISTS "user_title_grant" (
     "user_id" BIGINT,
     "title_id" BIGINT
 );
-CREATE TABLE IF NOT EXISTS "charactertitlegrant" (
+CREATE TABLE IF NOT EXISTS "character_title_grant" (
     "character_id" BIGINT,
     "title_id" BIGINT
 );
@@ -43,10 +43,10 @@ CREATE TABLE IF NOT EXISTS "charactertitlegrant" (
 ALTER TABLE "member" ADD CONSTRAINT fk_current_character_id FOREIGN KEY ("current_character_id") REFERENCES "character" ("id");
 ALTER TABLE "character" ADD CONSTRAINT fk_title_id FOREIGN KEY ("title_id") REFERENCES "title" ("id");
 ALTER TABLE "character" ADD CONSTRAINT fk_user_id FOREIGN KEY ("user_id") REFERENCES "member" ("id");
-ALTER TABLE "usertitlegrant" ADD CONSTRAINT fk_user_grant_user_id FOREIGN KEY ("user_id") REFERENCES "member" ("id");
-ALTER TABLE "usertitlegrant" ADD CONSTRAINT fk_user_grant_title_id FOREIGN KEY ("title_id") REFERENCES "title" ("id");
-ALTER TABLE "charactertitlegrant" ADD CONSTRAINT fk_character_grant_character_id FOREIGN KEY ("character_id") REFERENCES "character" ("id");
-ALTER TABLE "charactertitlegrant" ADD CONSTRAINT fk_character_grant_title_id FOREIGN KEY ("title_id") REFERENCES "title" ("id");
+ALTER TABLE "user_title_grant" ADD CONSTRAINT fk_user_grant_user_id FOREIGN KEY ("user_id") REFERENCES "member" ("id");
+ALTER TABLE "user_title_grant" ADD CONSTRAINT fk_user_grant_title_id FOREIGN KEY ("title_id") REFERENCES "title" ("id");
+ALTER TABLE "character_title_grant" ADD CONSTRAINT fk_character_grant_character_id FOREIGN KEY ("character_id") REFERENCES "character" ("id");
+ALTER TABLE "character_title_grant" ADD CONSTRAINT fk_character_grant_title_id FOREIGN KEY ("title_id") REFERENCES "title" ("id");
 
 -- UKs
 ALTER TABLE "member" ADD CONSTRAINT uk_discord_id UNIQUE ("discord_id");
