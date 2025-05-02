@@ -16,6 +16,7 @@ import io.github.hyscript7.fvbot.services.CharacterService;
 import io.github.hyscript7.fvbot.services.TitleService;
 import io.github.hyscript7.fvbot.services.UserService;
 import lombok.extern.slf4j.Slf4j;
+import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
@@ -66,6 +67,7 @@ public class TitleCommand implements ICommand {
     @Override
     public SlashCommandData getSlashCommandData() {
         return Commands.slash(getName(), getDescription()).addSubcommands(
+                new SubcommandData("refresh", "Refreshes your nickname."),
                 new SubcommandData("equip", "Equips a title.").addOption(OptionType.STRING, TITLE_ID_OPTION_ARG_NAME,
                         TITLE_ID_OPTION_ARG_DESCRIPTION, true),
                 new SubcommandData("unequip", "Unequips your current title."),
@@ -73,6 +75,9 @@ public class TitleCommand implements ICommand {
                         USER_OPTION_ARG_DESCRIPTION, false))
                 .addSubcommandGroups(
                         new SubcommandGroupData("admin", "Admin commands for managing titles.").addSubcommands(
+                                new SubcommandData("refresh", "Refreshes another members nickname.")
+                                        .addOption(OptionType.USER, USER_OPTION_ARG_NAME, USER_OPTION_ARG_DESCRIPTION,
+                                                true),
                                 new SubcommandData("add", "Adds a title.").addOption(OptionType.STRING,
                                         TITLE_PREFIX_OPTION_ARG_NAME, TITLE_PREFIX_OPTION_ARG_DESCRIPTION, false)
                                         .addOption(OptionType.STRING, TITLE_SUFFIX_OPTION_ARG_NAME,
@@ -100,6 +105,10 @@ public class TitleCommand implements ICommand {
         if (event.getSubcommandName() == null) {
             return;
         }
+        if (event.getGuild() == null) {
+            sendError(event, "You must be in a guild to use this command.");
+            return;
+        }
         Optional<Character> character = userService
                 .getSelectedCharacter(userService.getOrCreateUser(event.getUser().getIdLong()));
         if (character.isEmpty()) {
@@ -107,8 +116,8 @@ public class TitleCommand implements ICommand {
             return;
         }
         if (event.getSubcommandGroup() != null && event.getSubcommandGroup().equals("admin")) {
-            // TODO: Check whether role has permission
             switch (event.getSubcommandName()) {
+                case "refresh" -> executeAdminRefresh(event);
                 case "add" -> executeAdminAdd(event);
                 case "remove" -> executeAdminRemove(event);
                 case "list" -> executeAdminList(event);
@@ -117,11 +126,25 @@ public class TitleCommand implements ICommand {
             }
         } else {
             switch (event.getSubcommandName()) {
+                case "refresh" -> executeRefresh(event);
                 case "equip" -> executeEquip(event);
                 case "unequip" -> executeUnequip(event);
                 case "list" -> executeList(event);
             }
         }
+    }
+
+    private void executeRefresh(SlashCommandInteractionEvent event) throws CommandException {
+        Member member = event.getMember();
+        if (member == null) {
+            sendError(event, "Member not found.");
+            return;
+        }
+        User user = userService.getOrCreateUser(member.getIdLong());
+        Optional<Character> character = userService.getSelectedCharacter(user);
+        String nickname = character.get().discordFullName();
+        event.getGuild().modifyNickname(member, nickname).queue();
+        event.getHook().editOriginal("Nickname refreshed.").queue();
     }
 
     private void executeEquip(SlashCommandInteractionEvent event) throws CommandException {
@@ -188,7 +211,30 @@ public class TitleCommand implements ICommand {
         event.getHook().editOriginal("Titles: " + titleIds).queue();
     }
 
+    private void executeAdminRefresh(SlashCommandInteractionEvent event) throws CommandException {
+        if (replyWithErrorIfMissingPermission(event, event.getMember(), Permission.MODERATE_MEMBERS)) {
+            return;
+        }
+        Member member = event.getOptionsByName(USER_OPTION_ARG_NAME).get(0).getAsMember();
+        if (member == null) {
+            sendError(event, "Member not found.");
+            return;
+        }
+        User user = userService.getOrCreateUser(member.getIdLong());
+        Optional<Character> character = userService.getSelectedCharacter(user);
+        if (character.isEmpty()) {
+            sendError(event, "User does not have a character.");
+            return;
+        }
+        String nickname = character.get().discordFullName();
+        event.getGuild().modifyNickname(member, nickname).queue();
+        event.getHook().editOriginal("Nickname refreshed for " + member.getAsMention() + ".").queue();
+    }
+
     private void executeAdminAdd(SlashCommandInteractionEvent event) throws CommandException {
+        if (replyWithErrorIfMissingPermission(event, event.getMember(), Permission.MANAGE_SERVER)) {
+            return;
+        }
         String prefix;
         String suffix;
         if (event.getOptionsByName(TITLE_PREFIX_OPTION_ARG_NAME).isEmpty()) {
@@ -210,6 +256,9 @@ public class TitleCommand implements ICommand {
     }
 
     private void executeAdminRemove(SlashCommandInteractionEvent event) throws CommandException {
+        if (replyWithErrorIfMissingPermission(event, event.getMember(), Permission.MANAGE_SERVER)) {
+            return;
+        }
         String titleId = event.getOptionsByName(TITLE_ID_OPTION_ARG_NAME).get(0).getAsString();
         Optional<Title> title = titleService.getTitleById(Long.parseLong(titleId));
         if (title.isEmpty()) {
@@ -221,6 +270,9 @@ public class TitleCommand implements ICommand {
     }
 
     private void executeAdminList(SlashCommandInteractionEvent event) throws CommandException {
+        if (replyWithErrorIfMissingPermission(event, event.getMember(), Permission.MODERATE_MEMBERS)) {
+            return;
+        }
         List<Title> titles = titleService.getAllTitles();
         if (titles.isEmpty()) {
             event.getHook().editOriginal("Titles: None").queue();
@@ -234,6 +286,9 @@ public class TitleCommand implements ICommand {
     }
 
     private void executeAdminGrant(SlashCommandInteractionEvent event) throws CommandException {
+        if (replyWithErrorIfMissingPermission(event, event.getMember(), Permission.MODERATE_MEMBERS)) {
+            return;
+        }
         Member member = event.getOptionsByName(USER_OPTION_ARG_NAME).get(0).getAsMember();
         if (member == null) {
             sendError(event, "Member not found.");
@@ -258,6 +313,9 @@ public class TitleCommand implements ICommand {
     }
 
     private void executeAdminRevoke(SlashCommandInteractionEvent event) throws CommandException {
+        if (replyWithErrorIfMissingPermission(event, event.getMember(), Permission.MODERATE_MEMBERS)) {
+            return;
+        }
         Member member = event.getOptionsByName(USER_OPTION_ARG_NAME).get(0).getAsMember();
         if (member == null) {
             sendError(event, "Member not found.");
@@ -283,5 +341,15 @@ public class TitleCommand implements ICommand {
 
     private void sendError(SlashCommandInteractionEvent event, String message) {
         event.getHook().editOriginal(message).queue();
+    }
+
+    private boolean replyWithErrorIfMissingPermission(SlashCommandInteractionEvent event, Member member,
+            Permission permission) {
+        if (!member.hasPermission(permission)) {
+            sendError(event, "You don't have permission to use this command.\nYou must have the "
+                    + "`" + permission.getName() + "` permissions.");
+            return true;
+        }
+        return false;
     }
 }
