@@ -64,8 +64,7 @@ public class OnBoardingCommand implements ICommand {
             sendError(event, "You must be in a guild to use this command.", defaultEmbedProvider);
             return;
         }
-        net.dv8tion.jda.api.entities.User jdaUser = event.getOption(USER_OPTION_ARG_NAME).getAsUser();
-        Member member = event.getGuild().getMember(jdaUser);
+        Member member = event.getOption(USER_OPTION_ARG_NAME).getAsMember();
         if (member == null) {
             sendError(event, "Member not found.", defaultEmbedProvider);
             return;
@@ -82,7 +81,7 @@ public class OnBoardingCommand implements ICommand {
             return;
         }
         category.createTextChannel(onMemberJoinListener.getChambersChannelName(member.getUser().getName()))
-                .onSuccess(channel -> onMemberJoinListener.initializeOnBoarding(event.getMember(), channel))
+                .onSuccess(channel -> onMemberJoinListener.initializeOnBoarding(member, channel))
                 .queue();
         event.getHook().editOriginal("Onboarding restarted.").queue();
     }
