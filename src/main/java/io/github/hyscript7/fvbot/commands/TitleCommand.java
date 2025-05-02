@@ -8,6 +8,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 import io.github.hyscript7.fvbot.core.commands.ICommand;
+import io.github.hyscript7.fvbot.core.embeds.IEmbedProvider;
 import io.github.hyscript7.fvbot.core.exceptions.commands.CommandException;
 import io.github.hyscript7.fvbot.data.models.Character;
 import io.github.hyscript7.fvbot.data.models.Title;
@@ -29,6 +30,8 @@ import net.dv8tion.jda.api.interactions.commands.build.SubcommandGroupData;
 @Slf4j
 public class TitleCommand implements ICommand {
 
+    private final IEmbedProvider defaultEmbedProvider;
+
     private final CharacterService characterService;
 
     private final UserService userService;
@@ -48,10 +51,11 @@ public class TitleCommand implements ICommand {
     private static final String TITLE_GRANT_CHARACTER_ONLY_OPTION_ARG_NAME = "character-only";
     private static final String TITLE_GRANT_CHARACTER_ONLY_OPTION_ARG_DESCRIPTION = "Grant the title to the character only.";
 
-    TitleCommand(TitleService titleService, UserService userService, CharacterService characterService) {
+    TitleCommand(TitleService titleService, UserService userService, CharacterService characterService, IEmbedProvider defaultEmbedProvider) {
         this.titleService = titleService;
         this.userService = userService;
         this.characterService = characterService;
+        this.defaultEmbedProvider = defaultEmbedProvider;
     }
 
     @Override
@@ -106,13 +110,13 @@ public class TitleCommand implements ICommand {
             return;
         }
         if (event.getGuild() == null) {
-            sendError(event, "You must be in a guild to use this command.");
+            sendError(event, "You must be in a guild to use this command.", defaultEmbedProvider);
             return;
         }
         Optional<Character> character = userService
                 .getSelectedCharacter(userService.getOrCreateUser(event.getUser()));
         if (character.isEmpty()) {
-            sendError(event, "You don't have a character.");
+            sendError(event, "You don't have a character.", defaultEmbedProvider);
             return;
         }
         if (event.getSubcommandGroup() != null && event.getSubcommandGroup().equals("admin")) {
@@ -137,7 +141,7 @@ public class TitleCommand implements ICommand {
     private void executeRefresh(SlashCommandInteractionEvent event) throws CommandException {
         Member member = event.getMember();
         if (member == null) {
-            sendError(event, "Member not found.");
+            sendError(event, "Member not found.", defaultEmbedProvider);
             return;
         }
         User user = userService.getOrCreateUser(member.getUser());
@@ -150,18 +154,18 @@ public class TitleCommand implements ICommand {
     private void executeEquip(SlashCommandInteractionEvent event) throws CommandException {
         Member member = event.getMember();
         if (member == null) {
-            sendError(event, "Member not found.");
+            sendError(event, "Member not found.", defaultEmbedProvider);
             return;
         }
         String titleId = event.getOptionsByName(TITLE_ID_OPTION_ARG_NAME).get(0).getAsString();
         Optional<Title> title = titleService.getTitleById(Long.parseLong(titleId));
         if (title.isEmpty()) {
-            sendError(event, "Title not found.");
+            sendError(event, "Title not found.", defaultEmbedProvider);
             return;
         }
         User user = userService.getOrCreateUser(member.getUser());
         if (!titleService.userHasTitle(title.get(), user)) {
-            sendError(event, "You don't have that title.");
+            sendError(event, "You don't have that title.", defaultEmbedProvider);
             return;
         }
         Optional<Character> character = userService.getSelectedCharacter(user);
@@ -173,7 +177,7 @@ public class TitleCommand implements ICommand {
     private void executeUnequip(SlashCommandInteractionEvent event) throws CommandException {
         Member member = event.getMember();
         if (member == null) {
-            sendError(event, "Member not found.");
+            sendError(event, "Member not found.", defaultEmbedProvider);
             return;
         }
         User user = userService.getOrCreateUser(member.getUser());
@@ -191,7 +195,7 @@ public class TitleCommand implements ICommand {
             target = event.getOptionsByName(USER_OPTION_ARG_NAME).get(0).getAsMember();
         }
         if (target == null) {
-            sendError(event, "Member not found.");
+            sendError(event, "Member not found.", defaultEmbedProvider);
             return;
         }
         User user = userService.getOrCreateUser(target.getUser());
@@ -217,13 +221,13 @@ public class TitleCommand implements ICommand {
         }
         Member member = event.getOptionsByName(USER_OPTION_ARG_NAME).get(0).getAsMember();
         if (member == null) {
-            sendError(event, "Member not found.");
+            sendError(event, "Member not found.", defaultEmbedProvider);
             return;
         }
         User user = userService.getOrCreateUser(member.getUser());
         Optional<Character> character = userService.getSelectedCharacter(user);
         if (character.isEmpty()) {
-            sendError(event, "User does not have a character.");
+            sendError(event, "User does not have a character.", defaultEmbedProvider);
             return;
         }
         String nickname = character.get().discordFullName();
@@ -248,7 +252,7 @@ public class TitleCommand implements ICommand {
             suffix = event.getOptionsByName(TITLE_SUFFIX_OPTION_ARG_NAME).get(0).getAsString();
         }
         if (prefix == null && suffix == null) {
-            sendError(event, "Title must have a prefix or suffix or both.");
+            sendError(event, "Title must have a prefix or suffix or both.", defaultEmbedProvider);
             return;
         }
         Title title = titleService.createTitle(prefix, suffix);
@@ -262,7 +266,7 @@ public class TitleCommand implements ICommand {
         String titleId = event.getOptionsByName(TITLE_ID_OPTION_ARG_NAME).get(0).getAsString();
         Optional<Title> title = titleService.getTitleById(Long.parseLong(titleId));
         if (title.isEmpty()) {
-            sendError(event, "Title not found.");
+            sendError(event, "Title not found.", defaultEmbedProvider);
             return;
         }
         titleService.deleteTitle(title.get());
@@ -291,7 +295,7 @@ public class TitleCommand implements ICommand {
         }
         Member member = event.getOptionsByName(USER_OPTION_ARG_NAME).get(0).getAsMember();
         if (member == null) {
-            sendError(event, "Member not found.");
+            sendError(event, "Member not found.", defaultEmbedProvider);
             return;
         }
         boolean isCharacter = !event.getOptionsByName(TITLE_GRANT_CHARACTER_ONLY_OPTION_ARG_NAME).isEmpty()
@@ -299,7 +303,7 @@ public class TitleCommand implements ICommand {
         String titleId = event.getOptionsByName(TITLE_ID_OPTION_ARG_NAME).get(0).getAsString();
         Optional<Title> title = titleService.getTitleById(Long.parseLong(titleId));
         if (title.isEmpty()) {
-            sendError(event, "Title not found.");
+            sendError(event, "Title not found.", defaultEmbedProvider);
             return;
         }
         User user = userService.getOrCreateUser(member.getUser());
@@ -318,7 +322,7 @@ public class TitleCommand implements ICommand {
         }
         Member member = event.getOptionsByName(USER_OPTION_ARG_NAME).get(0).getAsMember();
         if (member == null) {
-            sendError(event, "Member not found.");
+            sendError(event, "Member not found.", defaultEmbedProvider);
             return;
         }
         boolean isCharacter = !event.getOptionsByName(TITLE_GRANT_CHARACTER_ONLY_OPTION_ARG_NAME).isEmpty()
@@ -326,7 +330,7 @@ public class TitleCommand implements ICommand {
         String titleId = event.getOptionsByName(TITLE_ID_OPTION_ARG_NAME).get(0).getAsString();
         Optional<Title> title = titleService.getTitleById(Long.parseLong(titleId));
         if (title.isEmpty()) {
-            sendError(event, "Title not found.");
+            sendError(event, "Title not found.", defaultEmbedProvider);
             return;
         }
         User user = userService.getOrCreateUser(member.getUser());
@@ -339,15 +343,11 @@ public class TitleCommand implements ICommand {
         event.getHook().editOriginal("Title revoked.").queue();
     }
 
-    private void sendError(SlashCommandInteractionEvent event, String message) {
-        event.getHook().editOriginal(message).queue();
-    }
-
     private boolean replyWithErrorIfMissingPermission(SlashCommandInteractionEvent event, Member member,
             Permission permission) {
         if (!member.hasPermission(permission)) {
             sendError(event, "You don't have permission to use this command.\nYou must have the "
-                    + "`" + permission.getName() + "` permissions.");
+                    + "`" + permission.getName() + "` permissions.", defaultEmbedProvider);
             return true;
         }
         return false;

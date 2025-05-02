@@ -1,5 +1,8 @@
 package io.github.hyscript7.fvbot.core.commands;
 
+import org.springframework.beans.factory.annotation.Autowired;
+
+import io.github.hyscript7.fvbot.core.embeds.IEmbedProvider;
 import io.github.hyscript7.fvbot.core.exceptions.commands.CommandException;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
@@ -43,5 +46,12 @@ public interface ICommand {
 
     default boolean prefersEphemeral() {
         return true;
+    }
+
+    default void sendError(SlashCommandInteractionEvent event, String message,
+            IEmbedProvider embedProvider) {
+        event.getHook()
+                .editOriginalEmbeds(embedProvider.getErrorEmbedBuilder(event.getJDA()).setDescription(message).build())
+                .queue();
     }
 }
