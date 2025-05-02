@@ -28,6 +28,10 @@ public class UserService {
         });
     }
 
+    public void updateUser(User user) {
+        userRepository.save(user);
+    }
+
     public boolean hasCharacters(User user) {
         return !characterRepository.findByUser(user).isEmpty();
     }
