@@ -25,6 +25,7 @@ import net.dv8tion.jda.api.events.guild.member.GuildMemberRemoveEvent;
 import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
+import net.dv8tion.jda.api.exceptions.HierarchyException;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.callbacks.IMessageEditCallback;
 import net.dv8tion.jda.api.interactions.components.ActionRow;
@@ -37,7 +38,7 @@ import net.dv8tion.jda.api.interactions.modals.Modal;
 
 @Component
 @Slf4j
-public class OnMemberJoinListener extends ListenerAdapter {
+public class OnBoardingEventHandler extends ListenerAdapter {
 
     private final IEmbedProvider defaultEmbedProvider;
 
@@ -69,7 +70,7 @@ public class OnMemberJoinListener extends ListenerAdapter {
     private static final int RANDOM_INNATE_NAME_MIN_LENGTH = 4;
     private static final int RANDOM_INNATE_NAME_MAX_LENGTH = 9;
 
-    public OnMemberJoinListener(FvBotConfigurationService fvBotConfigurationService, UserService userService,
+    public OnBoardingEventHandler(FvBotConfigurationService fvBotConfigurationService, UserService userService,
             CharacterService characterService, InnateNameService innateNameService,
             TitleService titleService, IEmbedProvider defaultEmbedProvider) {
         this.fvBotConfigurationService = fvBotConfigurationService;
@@ -402,7 +403,11 @@ public class OnMemberJoinListener extends ListenerAdapter {
                         + character.get().getFullNameWithTitle() + "!\n-# This channel will be deleted momentarily.")
                 .build()).setComponents().queue();
         grantUserMemberRole(member);
-        member.getGuild().modifyNickname(member, character.get().discordFullName()).queue();
+        try {
+            member.getGuild().modifyNickname(member, character.get().discordFullName()).queue();
+        } catch (HierarchyException e) {
+            log.warn("Failed to change nickname of " + member.getId() + " to " + character.get().discordFullName());
+        }
         message.getChannel().delete().queueAfter(5, TimeUnit.SECONDS);
     }
 
@@ -431,7 +436,7 @@ public class OnMemberJoinListener extends ListenerAdapter {
      * @param username The username of the user.
      * @return A channel name for the chambers realm channel.
      */
-    private String getChambersChannelName(String username) {
+    public String getChambersChannelName(String username) {
         String channelName = CHAMBERS_CHANNEL_PREFIX + username;
         // We need to clamp channelName to a max of 100 characters by removing
         // characters from the end. This limit is set by Discord.
@@ -485,6 +490,9 @@ public class OnMemberJoinListener extends ListenerAdapter {
      * @param member The guild member to whom the isolated role should be granted.
      */
     private void grantUserIsolatedRole(Member member) {
+        if (member.getRoles().contains(getMemberRole(member.getGuild()))) {
+            member.getGuild().removeRoleFromMember(member, getMemberRole(member.getGuild())).queue();
+        }
         member.getGuild().addRoleToMember(member, getIsolatedRole(member.getGuild())).queue();
     }
 
