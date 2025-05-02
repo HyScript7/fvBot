@@ -6,7 +6,6 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.stereotype.Component;
-import io.github.hyscript7.fvbot.config.EmbedProviderConfig;
 import io.github.hyscript7.fvbot.core.embeds.IEmbedProvider;
 import io.github.hyscript7.fvbot.data.models.Character;
 import io.github.hyscript7.fvbot.data.models.Title;
@@ -20,6 +19,7 @@ import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.channel.concrete.Category;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.events.guild.GenericGuildEvent;
 import net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent;
 import net.dv8tion.jda.api.events.guild.member.GuildMemberRemoveEvent;
 import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
@@ -106,22 +106,10 @@ public class OnBoardingEventHandler extends ListenerAdapter {
             return;
         }
 
-        Category category = event.getGuild().getCategoryById(fvBotConfigurationService.getCategoryId());
-        if (category == null) {
-            log.error("Category with id {} not found! Cannot create chambers realm channel.",
-                    fvBotConfigurationService.getCategoryId());
-            return;
-        }
-
         String channelName = getChambersChannelName(event.getUser().getName());
 
         // Clean up any relevant chambers realm channels on member leave
-        category.getTextChannels().stream().filter(channel -> channel.getName().equals(channelName))
-                .forEach(channel -> {
-                    channel.delete().reason("Member left the server.").queue();
-                    log.info("Cleaned up chambers realm channel {} ({}) due to member leaving the server.",
-                            channel.getName(), channel.getId());
-                });
+        cleanupChambersChannels(event, channelName);
 
         // Unset the user's current character, so that they can re-enter the onboarding
         // if they rejoin.
@@ -129,6 +117,36 @@ public class OnBoardingEventHandler extends ListenerAdapter {
         if (userService.getSelectedCharacter(user).isPresent()) {
             userService.setCurrentCharacter(user, null);
         }
+    }
+
+    /**
+     * Deletes any text channels in the configured category which have a name
+     * matching
+     * the given matchName.
+     * 
+     * @see OnBoardingEventHandler#getChambersChannelName(String)
+     * @see FvBotConfigurationService#getCategoryId()
+     * 
+     * @param event     The event that triggered the cleanup. Used to get the guild
+     *                  in which
+     *                  the cleanup is taking place.
+     * @param matchName
+     *                  The name of the channels to delete.
+     */
+    public void cleanupChambersChannels(GenericGuildEvent event, String matchName) {
+        Category category = event.getGuild().getCategoryById(fvBotConfigurationService.getCategoryId());
+        if (category == null) {
+            log.error("Category with id {} not found! Cannot create chambers realm channel.",
+                    fvBotConfigurationService.getCategoryId());
+            return;
+        }
+        category.getTextChannels().stream().filter(channel -> channel.getName().equals(matchName))
+                .forEach(channel -> {
+                    channel.delete().reason("Member left the server.").queue();
+                    log.info("Cleaned up chambers realm channel {} ({}) due to member leaving the server.",
+                            channel.getName(), channel.getId());
+                });
+
     }
 
     /**
@@ -238,7 +256,8 @@ public class OnBoardingEventHandler extends ListenerAdapter {
             messageContent = "Before you may access the server, you must create a character.";
         }
         event.editMessageEmbeds(
-                getEmbedProvider().getPrettyEmbedBuilder(member.getJDA().getSelfUser()).setDescription(messageContent).build())
+                getEmbedProvider().getPrettyEmbedBuilder(member.getJDA().getSelfUser()).setDescription(messageContent)
+                        .build())
                 .setComponents(ActionRow.of(components)).queue();
     }
 
@@ -269,8 +288,9 @@ public class OnBoardingEventHandler extends ListenerAdapter {
         }
         Optional<Character> character = characterService.getCharacterById(Long.parseLong(selectedCharacterId, 16));
         if (!character.isPresent()) {
-            event.editMessageEmbeds(getEmbedProvider().getPrettyEmbedBuilder(member.getJDA().getSelfUser()).setDescription(
-                    "Character not found. Please try again.\nMaybe an admin deleted it while you were choosing?")
+            event.editMessageEmbeds(getEmbedProvider().getPrettyEmbedBuilder(member.getJDA().getSelfUser())
+                    .setDescription(
+                            "Character not found. Please try again.\nMaybe an admin deleted it while you were choosing?")
                     .setColor(0xFF0000).build()).queue();
             return;
         }
@@ -509,7 +529,7 @@ public class OnBoardingEventHandler extends ListenerAdapter {
         member.getGuild().addRoleToMember(member, getMemberRole(member.getGuild())).queue();
     }
 
-    private IEmbedProvider getEmbedProvider()  {
+    private IEmbedProvider getEmbedProvider() {
         return defaultEmbedProvider;
     }
 
