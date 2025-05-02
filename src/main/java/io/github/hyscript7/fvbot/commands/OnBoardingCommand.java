@@ -66,7 +66,7 @@ public class OnBoardingCommand implements ICommand {
             sendError(event, "Member not found.");
             return;
         }
-        User user = userService.getOrCreateUser(member.getIdLong());
+        User user = userService.getOrCreateUser(member.getUser());
         userService.setCurrentCharacter(user, null);
         userService.updateUser(user);
         Category category = event.getGuild().getCategoryById(fvBotConfigurationService.getCategoryId());

@@ -110,7 +110,7 @@ public class TitleCommand implements ICommand {
             return;
         }
         Optional<Character> character = userService
-                .getSelectedCharacter(userService.getOrCreateUser(event.getUser().getIdLong()));
+                .getSelectedCharacter(userService.getOrCreateUser(event.getUser()));
         if (character.isEmpty()) {
             sendError(event, "You don't have a character.");
             return;
@@ -140,7 +140,7 @@ public class TitleCommand implements ICommand {
             sendError(event, "Member not found.");
             return;
         }
-        User user = userService.getOrCreateUser(member.getIdLong());
+        User user = userService.getOrCreateUser(member.getUser());
         Optional<Character> character = userService.getSelectedCharacter(user);
         String nickname = character.get().discordFullName();
         event.getGuild().modifyNickname(member, nickname).queue();
@@ -159,7 +159,7 @@ public class TitleCommand implements ICommand {
             sendError(event, "Title not found.");
             return;
         }
-        User user = userService.getOrCreateUser(member.getIdLong());
+        User user = userService.getOrCreateUser(member.getUser());
         if (!titleService.userHasTitle(title.get(), user)) {
             sendError(event, "You don't have that title.");
             return;
@@ -176,7 +176,7 @@ public class TitleCommand implements ICommand {
             sendError(event, "Member not found.");
             return;
         }
-        User user = userService.getOrCreateUser(member.getIdLong());
+        User user = userService.getOrCreateUser(member.getUser());
         Optional<Character> character = userService.getSelectedCharacter(user);
         character.get().setTitle(null);
         characterService.updateCharacter(character.get());
@@ -194,7 +194,7 @@ public class TitleCommand implements ICommand {
             sendError(event, "Member not found.");
             return;
         }
-        User user = userService.getOrCreateUser(target.getIdLong());
+        User user = userService.getOrCreateUser(target.getUser());
         Optional<Character> character = userService.getSelectedCharacter(user);
         String initials = character.get().getFirstName().charAt(0) + "" + character.get().getLastName().charAt(0);
         List<Title> userTitles = titleService.getUserTitles(user);
@@ -220,7 +220,7 @@ public class TitleCommand implements ICommand {
             sendError(event, "Member not found.");
             return;
         }
-        User user = userService.getOrCreateUser(member.getIdLong());
+        User user = userService.getOrCreateUser(member.getUser());
         Optional<Character> character = userService.getSelectedCharacter(user);
         if (character.isEmpty()) {
             sendError(event, "User does not have a character.");
@@ -302,7 +302,7 @@ public class TitleCommand implements ICommand {
             sendError(event, "Title not found.");
             return;
         }
-        User user = userService.getOrCreateUser(member.getIdLong());
+        User user = userService.getOrCreateUser(member.getUser());
         if (isCharacter) {
             Character character = userService.getSelectedCharacter(user).get();
             titleService.grantTitle(character, title.get());
@@ -329,7 +329,7 @@ public class TitleCommand implements ICommand {
             sendError(event, "Title not found.");
             return;
         }
-        User user = userService.getOrCreateUser(member.getIdLong());
+        User user = userService.getOrCreateUser(member.getUser());
         if (isCharacter) {
             Character character = userService.getSelectedCharacter(user).get();
             titleService.revokeTitle(character, title.get());

@@ -125,7 +125,7 @@ public class OnBoardingEventHandler extends ListenerAdapter {
 
         // Unset the user's current character, so that they can re-enter the onboarding
         // if they rejoin.
-        User user = userService.getOrCreateUser(event.getUser().getIdLong());
+        User user = userService.getOrCreateUser(event.getUser());
         if (userService.getSelectedCharacter(user).isPresent()) {
             userService.setCurrentCharacter(user, null);
         }
@@ -176,7 +176,7 @@ public class OnBoardingEventHandler extends ListenerAdapter {
             // This shi ain't even in a DM channel.
             return;
         }
-        User user = userService.getOrCreateUser(member.getIdLong());
+        User user = userService.getOrCreateUser(member.getUser());
         switch (event.getComponentId()) {
             case ONBOARDING_BUTTON_COMPONENT_ID -> handleInitializeOnBoardingButton(event, message, member, user);
             case CHARACTER_SELECT_BUTTON_COMPONENT_ID -> handleExistingCharacterButton(event, message, member, user);
@@ -199,7 +199,7 @@ public class OnBoardingEventHandler extends ListenerAdapter {
         if (member == null) {
             return;
         }
-        User user = userService.getOrCreateUser(member.getIdLong());
+        User user = userService.getOrCreateUser(member.getUser());
         switch (event.getComponentId()) {
             case CHARACTER_SELECT_DROPDOWN_COMPONENT_ID -> handleCharacterSelectDropdown(event, message, member, user);
             case TITLE_SELECT_DROPDOWN_COMPONENT_ID -> handleTitleSelectionDropdown(event, message, member, user);
@@ -217,7 +217,7 @@ public class OnBoardingEventHandler extends ListenerAdapter {
         if (member == null) {
             return;
         }
-        User user = userService.getOrCreateUser(member.getIdLong());
+        User user = userService.getOrCreateUser(member.getUser());
         switch (event.getModalId()) {
             case CHARACTER_CREATION_MODAL_ID -> handleCharacterCreationModalSubmission(event, message, member, user);
         }
