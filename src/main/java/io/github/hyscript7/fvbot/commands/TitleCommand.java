@@ -51,7 +51,8 @@ public class TitleCommand implements ICommand {
     private static final String TITLE_GRANT_CHARACTER_ONLY_OPTION_ARG_NAME = "character-only";
     private static final String TITLE_GRANT_CHARACTER_ONLY_OPTION_ARG_DESCRIPTION = "Grant the title to the character only.";
 
-    TitleCommand(TitleService titleService, UserService userService, CharacterService characterService, IEmbedProvider defaultEmbedProvider) {
+    TitleCommand(TitleService titleService, UserService userService, CharacterService characterService,
+            IEmbedProvider defaultEmbedProvider) {
         this.titleService = titleService;
         this.userService = userService;
         this.characterService = characterService;
@@ -210,7 +211,8 @@ public class TitleCommand implements ICommand {
             return;
         }
         String titleIds = titles.stream().map(t -> {
-            return "`" + t.getId() + "`: " + t.getPrefix() + initials + t.getSuffix();
+            return "`" + t.getId() + "`: " + (t.getPrefix() != null ? t.getPrefix() : "") + initials
+                    + (t.getSuffix() != null ? t.getSuffix() : "");
         }).collect(Collectors.joining("\n- "));
         event.getHook().editOriginal("Titles: " + titleIds).queue();
     }
@@ -284,7 +286,8 @@ public class TitleCommand implements ICommand {
         }
         // TODO: Add pagination
         String titleIds = titles.stream().map(t -> {
-            return "`" + t.getId() + "`: " + t.getPrefix() + "Firstname Lastname" + t.getSuffix();
+            return "`" + t.getId() + "`: " + (t.getPrefix() != null ? t.getPrefix() : "") + "Firstname Lastname"
+                    + (t.getSuffix() != null ? t.getSuffix() : "");
         }).collect(Collectors.joining("\n- "));
         event.getHook().editOriginal("Titles: " + titleIds).queue();
     }

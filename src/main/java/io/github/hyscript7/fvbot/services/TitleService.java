@@ -65,7 +65,11 @@ public class TitleService {
 
     public boolean userHasTitle(Title title, User user) {
         Optional<Character> character = userService.getSelectedCharacter(user);
-        return getUserTitles(user).contains(title) || character.isPresent() && getCharacterTitles(character.get()).contains(title);
+        List<Long> userTitles = getUserTitles(user).stream().map(Title::getId).map(Long::longValue).toList();
+        List<Long> characterTitles = character.isPresent() ? getCharacterTitles(character.get()).stream()
+                .map(Title::getId).map(Long::longValue).toList() : new ArrayList<>();
+        // You'd think the without converting it to Long and then long would work, but apparently fucking not.
+        return userTitles.contains(title.getId().longValue()) || characterTitles.contains(title.getId().longValue());
     }
 
     public void grantTitle(User user, Title title) {
