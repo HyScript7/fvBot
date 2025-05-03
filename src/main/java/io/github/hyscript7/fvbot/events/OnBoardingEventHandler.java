@@ -86,6 +86,9 @@ public class OnBoardingEventHandler extends ListenerAdapter {
         if (event.getGuild().getIdLong() != fvBotConfigurationService.getGuildId()) {
             return;
         }
+        if (event.getUser().isBot()) {
+            return;
+        }
 
         Category category = event.getGuild().getCategoryById(fvBotConfigurationService.getCategoryId());
         if (category == null) {
@@ -103,6 +106,9 @@ public class OnBoardingEventHandler extends ListenerAdapter {
     @Override
     public void onGuildMemberRemove(GuildMemberRemoveEvent event) {
         if (event.getGuild().getIdLong() != fvBotConfigurationService.getGuildId()) {
+            return;
+        }
+        if (event.getUser().isBot()) {
             return;
         }
 
