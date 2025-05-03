@@ -20,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.exceptions.HierarchyException;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.SlashCommandData;
@@ -147,9 +148,11 @@ public class TitleCommand implements ICommand {
         }
         User user = userService.getOrCreateUser(member.getUser());
         Optional<Character> character = userService.getSelectedCharacter(user);
-        String nickname = character.get().discordFullName();
-        event.getGuild().modifyNickname(member, nickname).queue();
-        event.getHook().editOriginal("Nickname refreshed.").queue();
+        if (refreshUserNickname(member)) {
+            event.getHook().editOriginal("Nickname refreshed.").queue();
+        } else {
+            sendError(event, "Could not refresh nickname, possibly due to a permission issue.\nIs your role above the bots highest?", defaultEmbedProvider);
+        }
     }
 
     private void executeEquip(SlashCommandInteractionEvent event) throws CommandException {
@@ -172,6 +175,7 @@ public class TitleCommand implements ICommand {
         Optional<Character> character = userService.getSelectedCharacter(user);
         character.get().setTitle(title.get());
         characterService.updateCharacter(character.get());
+        refreshUserNickname(member);
         event.getHook().editOriginal("Title equipped.").queue();
     }
 
@@ -232,9 +236,28 @@ public class TitleCommand implements ICommand {
             sendError(event, "User does not have a character.", defaultEmbedProvider);
             return;
         }
+        if (refreshUserNickname(member)) {
+            event.getHook().editOriginal("Nickname refreshed for " + member.getAsMention() + ".").queue();
+            return;
+        } else {
+            sendError(event, "Failed to refresh nickname for " + member.getAsMention() + ", possibly due to a permission issue.\nIs the users role above the bots highest?", defaultEmbedProvider);
+        }
+    }
+
+    private boolean refreshUserNickname(Member member) {
+        User user = userService.getOrCreateUser(member.getUser());
+        Optional<Character> character = userService.getSelectedCharacter(user);
+        if (character.isEmpty()) {
+            return false;
+        }
         String nickname = character.get().discordFullName();
-        event.getGuild().modifyNickname(member, nickname).queue();
-        event.getHook().editOriginal("Nickname refreshed for " + member.getAsMention() + ".").queue();
+        try {
+            member.getGuild().modifyNickname(member, nickname).queue();
+            return true;
+        } catch (HierarchyException e) {
+            log.warn("Failed to change nickname of " + member.getId() + " to " + nickname + " (TitleCommand)");
+            return false;
+        }
     }
 
     private void executeAdminAdd(SlashCommandInteractionEvent event) throws CommandException {
