@@ -49,4 +49,8 @@ public class CharacterService {
         return characterRepository.save(character);
     }
 
+    public void deleteCharacter(Character character) {
+        characterRepository.delete(character);
+    }
+
 }

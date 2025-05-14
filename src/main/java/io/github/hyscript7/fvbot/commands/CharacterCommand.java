@@ -1,5 +1,6 @@
 package io.github.hyscript7.fvbot.commands;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Component;
@@ -7,9 +8,13 @@ import org.springframework.stereotype.Component;
 import io.github.hyscript7.fvbot.core.commands.ICommand;
 import io.github.hyscript7.fvbot.core.embeds.IEmbedProvider;
 import io.github.hyscript7.fvbot.core.exceptions.commands.CommandException;
+import io.github.hyscript7.fvbot.services.CharacterService;
+import io.github.hyscript7.fvbot.services.InnateNameService;
 import io.github.hyscript7.fvbot.services.UserService;
 import io.github.hyscript7.fvbot.data.models.Character;
+import io.github.hyscript7.fvbot.data.models.User;
 import lombok.extern.slf4j.Slf4j;
+import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
@@ -21,6 +26,10 @@ import net.dv8tion.jda.api.interactions.commands.build.SubcommandGroupData;
 @Component
 @Slf4j
 public class CharacterCommand implements ICommand {
+
+    private final CharacterService characterService;
+
+    private final InnateNameService innateNameService;
 
     private final IEmbedProvider defaultEmbedProvider;
     private final UserService userService;
@@ -44,9 +53,15 @@ public class CharacterCommand implements ICommand {
     private static final String CHARACTER_LEVEL_OPTION_ARG_NAME = "level";
     private static final String CHARACTER_LEVEL_OPTION_ARG_DESCRIPTION = "Character level.";
 
-    CharacterCommand(IEmbedProvider defaultEmbedProvider, UserService userService) {
+    private static final int RANDOM_INNATE_NAME_MIN_LENGTH = 4;
+    private static final int RANDOM_INNATE_NAME_MAX_LENGTH = 9;
+
+    CharacterCommand(IEmbedProvider defaultEmbedProvider, UserService userService, InnateNameService innateNameService,
+            CharacterService characterService) {
         this.defaultEmbedProvider = defaultEmbedProvider;
         this.userService = userService;
+        this.innateNameService = innateNameService;
+        this.characterService = characterService;
     }
 
     @Override
@@ -75,9 +90,9 @@ public class CharacterCommand implements ICommand {
                 new SubcommandData("list", "Lists all of your (or the specified user's) characters.")
                         .addOption(OptionType.USER, USER_OPTION_ARG_NAME, USER_OPTION_ARG_DESCRIPTION, false),
                 new SubcommandData("delete", "Deletes a character.").addOption(OptionType.STRING,
-                        CHARACTER_INNATE_NAME_OPTION_ARG_NAME, CHARACTER_FIRSTNAME_OPTION_ARG_DESCRIPTION, true),
+                        CHARACTER_INNATE_NAME_OPTION_ARG_NAME, CHARACTER_INNATE_NAME_OPTION_ARG_DESCRIPTION, true),
                 new SubcommandData("switch", "Switches to another character.").addOption(OptionType.STRING,
-                        CHARACTER_INNATE_NAME_OPTION_ARG_NAME, CHARACTER_FIRSTNAME_OPTION_ARG_DESCRIPTION, true))
+                        CHARACTER_INNATE_NAME_OPTION_ARG_NAME, CHARACTER_INNATE_NAME_OPTION_ARG_DESCRIPTION, true))
                 .addSubcommandGroups(
                         new SubcommandGroupData("admin", "Admin commands for managing characters.")
                                 .addSubcommands(
@@ -92,7 +107,8 @@ public class CharacterCommand implements ICommand {
                                                         USER_OPTION_ARG_DESCRIPTION, false),
                                         // This create is basically the same as the normal one, but you can specify
                                         // another member and the innate name.
-                                        new SubcommandData("create", "Creates a new character for either your self or another user.")
+                                        new SubcommandData("create",
+                                                "Creates a new character for either your self or another user.")
                                                 .addOption(OptionType.USER, USER_OPTION_ARG_NAME,
                                                         USER_OPTION_ARG_DESCRIPTION, true)
                                                 .addOption(OptionType.STRING, CHARACTER_FIRSTNAME_OPTION_ARG_NAME,
@@ -153,31 +169,116 @@ public class CharacterCommand implements ICommand {
     }
 
     private void executeCreate(SlashCommandInteractionEvent event) throws CommandException {
-        if (true) { // ! Remove this block
-            sendError(event, "This command is not implemented yet.", defaultEmbedProvider);
+        String firstName = event.getOption(CHARACTER_FIRSTNAME_OPTION_ARG_NAME).getAsString();
+        String lastName = event.getOption(CHARACTER_LASTNAME_OPTION_ARG_NAME).getAsString();
+        String resurrection;
+        if (!event.getOptionsByName(CHARACTER_RESURRECTION_OPTION_ARG_NAME).isEmpty()) {
+            resurrection = event.getOption(CHARACTER_RESURRECTION_OPTION_ARG_NAME).getAsString();
+        } else {
+            resurrection = "0";
+        }
+        String level;
+        if (!event.getOptionsByName(CHARACTER_LEVEL_OPTION_ARG_NAME).isEmpty()) {
+            level = event.getOption(CHARACTER_LEVEL_OPTION_ARG_NAME).getAsString();
+        } else {
+            level = "1";
+        }
+        int resurrectionInt;
+        int levelInt;
+        try {
+            resurrectionInt = Integer.parseInt(resurrection);
+            levelInt = Integer.parseInt(level);
+        } catch (NumberFormatException e) {
+            sendError(event, "Resurrection and level must be integers.", defaultEmbedProvider);
             return;
         }
+        User user = userService.getOrCreateUser(event.getUser());
+
+        String name = innateNameService.generateInnateName(RANDOM_INNATE_NAME_MIN_LENGTH,
+                RANDOM_INNATE_NAME_MAX_LENGTH);
+
+        Character character = Character.builder()
+                .innateName(name)
+                .firstName(firstName)
+                .lastName(lastName)
+                .resurrection(resurrectionInt)
+                .level(levelInt)
+                .user(user)
+                .build();
+        characterService.createCharacter(user, character);
+        event.getHook().editOriginalEmbeds(defaultEmbedProvider.getPrettyEmbedBuilder(event.getJDA().getSelfUser())
+                .setDescription("Character created.").build()).queue();
     }
 
     private void executeDelete(SlashCommandInteractionEvent event) throws CommandException {
-        if (true) { // ! Remove this block
-            sendError(event, "This command is not implemented yet.", defaultEmbedProvider);
+        String innateName;
+        if (event.getOptionsByName(CHARACTER_INNATE_NAME_OPTION_ARG_NAME).isEmpty()) {
+            sendError(event, "You must specify an innate name.", defaultEmbedProvider);
             return;
         }
+        innateName = event.getOption(CHARACTER_INNATE_NAME_OPTION_ARG_NAME).getAsString();
+        User user = userService.getOrCreateUser(event.getUser());
+        Optional<Character> character = characterService.getCharactersOfUser(user).stream()
+                .filter(c -> c.getInnateName().equals(innateName)).findFirst();
+        if (character.isEmpty()) {
+            sendError(event, "Character not found.", defaultEmbedProvider);
+            return;
+        }
+        if (user.getCurrentCharacter().getInnateName().equals(character.get().getInnateName())) {
+            sendError(event, "You can't delete a currently selected character.", defaultEmbedProvider);
+            return;
+        }
+        characterService.deleteCharacter(character.get());
+        event.getHook().editOriginalEmbeds(defaultEmbedProvider.getPrettyEmbedBuilder(event.getJDA().getSelfUser())
+                .setDescription("Character deleted.").build()).queue();
     }
 
     private void executeList(SlashCommandInteractionEvent event) throws CommandException {
-        if (true) { // ! Remove this block
-            sendError(event, "This command is not implemented yet.", defaultEmbedProvider);
+        net.dv8tion.jda.api.entities.User discordUser;
+        if (event.getOptionsByName(USER_OPTION_ARG_NAME).isEmpty()) {
+            discordUser = event.getUser();
+        } else {
+            discordUser = event.getOptionsByName(USER_OPTION_ARG_NAME).get(0).getAsUser();
+        }
+        User user = userService.getOrCreateUser(discordUser);
+        List<Character> characters = characterService.getCharactersOfUser(user);
+        if (characters.isEmpty()) {
+            if (discordUser.equals(event.getUser())) {
+                sendError(event, "You don't have any characters.", defaultEmbedProvider);
+            } else {
+                sendError(event, user.getUsername() + " doesn't have any characters.", defaultEmbedProvider);
+            }
             return;
         }
+        EmbedBuilder embedBuilder = defaultEmbedProvider.getPrettyEmbedBuilder(event.getJDA().getSelfUser())
+                .setTitle("Characters of " + discordUser.getName());
+        StringBuilder stringBuilder = new StringBuilder();
+        for (Character character : characters) {
+            stringBuilder.append("\n" + character.getFullNameWithTitle() + " (" + character.getInnateName() + ")");
+        }
+        embedBuilder.setDescription(stringBuilder.toString().strip());
+        event.getHook().editOriginalEmbeds(embedBuilder.build()).queue();
     }
 
     private void executeSwitch(SlashCommandInteractionEvent event) throws CommandException {
-        if (true) { // ! Remove this block
-            sendError(event, "This command is not implemented yet.", defaultEmbedProvider);
+        String innateName;
+        if (event.getOptionsByName(CHARACTER_INNATE_NAME_OPTION_ARG_NAME).isEmpty()) {
+            sendError(event, "You must specify an innate name.", defaultEmbedProvider);
             return;
         }
+        innateName = event.getOption(CHARACTER_INNATE_NAME_OPTION_ARG_NAME).getAsString();
+        User user = userService.getOrCreateUser(event.getUser());
+        Optional<Character> character = characterService.getCharactersOfUser(user).stream()
+                .filter(c -> c.getInnateName().equals(innateName)).findFirst();
+        if (character.isEmpty()) {
+            sendError(event, "Character not found.", defaultEmbedProvider);
+            return;
+        }
+        userService.setCurrentCharacter(user, character.get());
+        String nickname = character.get().discordFullName();
+        event.getMember().modifyNickname(nickname).queue();
+        event.getHook().editOriginalEmbeds(defaultEmbedProvider.getPrettyEmbedBuilder(event.getJDA().getSelfUser())
+                .setDescription("Character switched.").build()).queue();
     }
 
     private void executeAdminList(SlashCommandInteractionEvent event) throws CommandException {
