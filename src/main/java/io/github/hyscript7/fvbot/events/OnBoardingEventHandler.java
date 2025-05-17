@@ -178,7 +178,7 @@ public class OnBoardingEventHandler extends ListenerAdapter {
         // This method is public so that it can be artificially triggered through admin
         // slash commands.
         Button button = Button.success(ONBOARDING_BUTTON_COMPONENT_ID, "Begin");
-        String messageContent = "Welcome to the chambers realm, " + discordUser.getUser().getName()
+        String messageContent = "Welcome to the chambers realm, " + discordUser.getUser().getAsMention()
                 + "!\nClick the button below to begin your onboarding.";
         isolateChannel(channel.getGuild(), discordUser, channel);
         grantUserIsolatedRole(discordUser);
