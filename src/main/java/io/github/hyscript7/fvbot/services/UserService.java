@@ -28,6 +28,18 @@ public class UserService {
         });
     }
 
+    public User getOrCreateUser(net.dv8tion.jda.api.entities.User discordUser) {
+        Optional<User> user = userRepository.findByDiscordId(discordUser.getIdLong());
+        return user.orElseGet(() -> {
+            User newUser = User.builder().discordId(discordUser.getIdLong()).username(discordUser.getName()).build();
+            return userRepository.save(newUser);
+        });
+    }
+
+    public void updateUser(User user) {
+        userRepository.save(user);
+    }
+
     public boolean hasCharacters(User user) {
         return !characterRepository.findByUser(user).isEmpty();
     }

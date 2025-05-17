@@ -45,6 +45,7 @@ public class User {
     @JoinTable(name = "UserTitleGrant", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "title_id"))
     private List<Title> titles;
 
-    @OneToMany
+    @OneToMany(fetch = FetchType.EAGER)
+    @JoinColumn(name = "user_id")
     private List<Character> characters;
 }

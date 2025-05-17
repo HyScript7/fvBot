@@ -16,14 +16,17 @@ import io.github.hyscript7.fvbot.data.models.User;
 @Service
 public class TitleService {
 
+    private final UserService userService;
+
     private final TitleRepository titleRepository;
 
     private final CharacterRepository characterRepository;
 
     TitleService(CharacterRepository characterRepository,
-            TitleRepository titleRepository) {
+            TitleRepository titleRepository, UserService userService) {
         this.characterRepository = characterRepository;
         this.titleRepository = titleRepository;
+        this.userService = userService;
     }
 
     public Optional<Title> getTitleById(Long id) {
@@ -54,6 +57,43 @@ public class TitleService {
     public Title createTitle(String prefix, String suffix) {
         Title title = Title.builder().prefix(prefix).suffix(suffix).build();
         return titleRepository.save(title);
+    }
+
+    public void deleteTitle(Title title) {
+        titleRepository.delete(title);
+    }
+
+    public boolean userHasTitle(Title title, User user) {
+        Optional<Character> character = userService.getSelectedCharacter(user);
+        List<Long> userTitles = getUserTitles(user).stream().map(Title::getId).map(Long::longValue).toList();
+        List<Long> characterTitles = character.isPresent() ? getCharacterTitles(character.get()).stream()
+                .map(Title::getId).map(Long::longValue).toList() : new ArrayList<>();
+        // You'd think the without converting it to Long and then long would work, but apparently fucking not.
+        return userTitles.contains(title.getId().longValue()) || characterTitles.contains(title.getId().longValue());
+    }
+
+    public void grantTitle(User user, Title title) {
+        User updatedUser = user;
+        updatedUser.getTitles().add(title);
+        userService.updateUser(updatedUser);
+    }
+
+    public void grantTitle(Character character, Title title) {
+        Character updatedCharacter = character;
+        updatedCharacter.getTitles().add(title);
+        characterRepository.save(updatedCharacter);
+    }
+
+    public void revokeTitle(User user, Title title) {
+        User updatedUser = user;
+        updatedUser.getTitles().remove(title);
+        userService.updateUser(updatedUser);
+    }
+
+    public void revokeTitle(Character character, Title title) {
+        Character updatedCharacter = character;
+        updatedCharacter.getTitles().remove(title);
+        characterRepository.save(updatedCharacter);
     }
 
 }

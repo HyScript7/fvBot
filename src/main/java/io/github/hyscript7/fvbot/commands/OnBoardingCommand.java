@@ -3,6 +3,7 @@ package io.github.hyscript7.fvbot.commands;
 import org.springframework.stereotype.Component;
 
 import io.github.hyscript7.fvbot.core.commands.ICommand;
+import io.github.hyscript7.fvbot.core.embeds.IEmbedProvider;
 import io.github.hyscript7.fvbot.core.exceptions.commands.CommandException;
 import io.github.hyscript7.fvbot.data.models.User;
 import io.github.hyscript7.fvbot.events.OnBoardingEventHandler;
@@ -20,6 +21,8 @@ import net.dv8tion.jda.api.interactions.commands.build.SlashCommandData;
 @Slf4j
 public class OnBoardingCommand implements ICommand {
 
+    private final IEmbedProvider defaultEmbedProvider;
+
     private final FvBotConfigurationService fvBotConfigurationService;
 
     private final OnBoardingEventHandler onMemberJoinListener;
@@ -32,10 +35,11 @@ public class OnBoardingCommand implements ICommand {
     private static final String USER_OPTION_ARG_DESCRIPTION = "User to restart onboarding for.";
 
     OnBoardingCommand(UserService userService, OnBoardingEventHandler onMemberJoinListener,
-            FvBotConfigurationService fvBotConfigurationService) {
+            FvBotConfigurationService fvBotConfigurationService, IEmbedProvider defaultEmbedProvider) {
         this.userService = userService;
         this.onMemberJoinListener = onMemberJoinListener;
         this.fvBotConfigurationService = fvBotConfigurationService;
+        this.defaultEmbedProvider = defaultEmbedProvider;
     }
 
     @Override
@@ -57,16 +61,20 @@ public class OnBoardingCommand implements ICommand {
     @Override
     public void execute(SlashCommandInteractionEvent event) throws CommandException {
         if (event.getGuild() == null) {
-            sendError(event, "You must be in a guild to use this command.");
+            sendError(event, "You must be in a guild to use this command.", defaultEmbedProvider);
             return;
         }
-        net.dv8tion.jda.api.entities.User jdaUser = event.getOption(USER_OPTION_ARG_NAME).getAsUser();
-        Member member = event.getGuild().getMember(jdaUser);
+        Member member = event.getOption(USER_OPTION_ARG_NAME).getAsMember();
         if (member == null) {
-            sendError(event, "Member not found.");
+            sendError(event, "Member not found.", defaultEmbedProvider);
             return;
         }
-        User user = userService.getOrCreateUser(member.getIdLong());
+        if (!member.getUser().equals(event.getUser()) && !event.getMember().canInteract(member)) {
+                sendError(event, "You don't have permission to restart onboarding for this user.",
+                        defaultEmbedProvider);
+            }
+        
+        User user = userService.getOrCreateUser(member.getUser());
         userService.setCurrentCharacter(user, null);
         userService.updateUser(user);
         Category category = event.getGuild().getCategoryById(fvBotConfigurationService.getCategoryId());
@@ -74,17 +82,12 @@ public class OnBoardingCommand implements ICommand {
             log.error("Category with id {} not found! Cannot create chambers realm channel. (Restart Command)",
                     fvBotConfigurationService.getCategoryId());
             sendError(event, "Chambers Realm category not found.\nDoes the bot have access?\n<#"
-                    + fvBotConfigurationService.getCategoryId() + ">");
+                    + fvBotConfigurationService.getCategoryId() + ">", defaultEmbedProvider);
             return;
         }
         category.createTextChannel(onMemberJoinListener.getChambersChannelName(member.getUser().getName()))
-                .onSuccess(channel -> onMemberJoinListener.initializeOnBoarding(event.getMember(), channel))
+                .onSuccess(channel -> onMemberJoinListener.initializeOnBoarding(member, channel))
                 .queue();
         event.getHook().editOriginal("Onboarding restarted.").queue();
     }
-
-    private void sendError(SlashCommandInteractionEvent event, String message) {
-        event.getHook().editOriginal(message).queue();
-    }
-
 }
