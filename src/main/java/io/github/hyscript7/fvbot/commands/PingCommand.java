@@ -40,7 +40,5 @@ public class PingCommand implements ICommand {
         embedBuilder.addField("API Latency", apiLatencyMs + " ms", false);
         embedBuilder.addField("Gateway Latency", gatewayLatencyMs + " ms", false);
         event.getHook().editOriginalEmbeds(embedBuilder.build()).queue();
-        log.info("Latency (API): " + apiLatencyMs + " ms");
-        log.info("Latency (Gateway): " + gatewayLatencyMs + " ms");
     }
 }

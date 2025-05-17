@@ -88,6 +88,6 @@ public class OnBoardingCommand implements ICommand {
         category.createTextChannel(onMemberJoinListener.getChambersChannelName(member.getUser().getName()))
                 .onSuccess(channel -> onMemberJoinListener.initializeOnBoarding(member, channel))
                 .queue();
-        event.getHook().editOriginal("Onboarding restarted.").queue();
+        sendPretty(event, "Restarted onboarding for " + member.getAsMention() + ".", defaultEmbedProvider);
     }
 }

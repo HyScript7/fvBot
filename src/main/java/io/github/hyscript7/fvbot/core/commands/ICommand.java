@@ -54,4 +54,8 @@ public interface ICommand {
                 .editOriginalEmbeds(embedProvider.getErrorEmbedBuilder(event.getJDA()).setDescription(message).build())
                 .queue();
     }
+
+    default void sendPretty(SlashCommandInteractionEvent event, String message, IEmbedProvider embedProvider) {
+        event.getHook().editOriginalEmbeds(embedProvider.getPrettyEmbedBuilder(event.getJDA().getSelfUser()).setDescription(message).build()).queue();
+    }
 }

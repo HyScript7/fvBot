@@ -17,6 +17,7 @@ import io.github.hyscript7.fvbot.services.CharacterService;
 import io.github.hyscript7.fvbot.services.TitleService;
 import io.github.hyscript7.fvbot.services.UserService;
 import lombok.extern.slf4j.Slf4j;
+import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
@@ -149,7 +150,7 @@ public class TitleCommand implements ICommand {
         User user = userService.getOrCreateUser(member.getUser());
         Optional<Character> character = userService.getSelectedCharacter(user);
         if (refreshUserNickname(member)) {
-            event.getHook().editOriginal("Nickname refreshed.").queue();
+            sendPretty(event, "Nickname refreshed for " + member.getAsMention() + ".", defaultEmbedProvider);
         } else {
             sendError(event, "Could not refresh nickname, possibly due to a permission issue.\nIs your role above the bots highest?", defaultEmbedProvider);
         }
@@ -176,7 +177,7 @@ public class TitleCommand implements ICommand {
         character.get().setTitle(title.get());
         characterService.updateCharacter(character.get());
         refreshUserNickname(member);
-        event.getHook().editOriginal("Title equipped.").queue();
+        sendPretty(event, "Title equipped, you now have title ID `" + title.get().getId() + "` as your title.", defaultEmbedProvider);
     }
 
     private void executeUnequip(SlashCommandInteractionEvent event) throws CommandException {
@@ -189,7 +190,8 @@ public class TitleCommand implements ICommand {
         Optional<Character> character = userService.getSelectedCharacter(user);
         character.get().setTitle(null);
         characterService.updateCharacter(character.get());
-        event.getHook().editOriginal("Title unequipped.").queue();
+        refreshUserNickname(member);
+        sendPretty(event, "Title unequipped, you now have no title.", defaultEmbedProvider);
     }
 
     private void executeList(SlashCommandInteractionEvent event) throws CommandException {
@@ -205,20 +207,28 @@ public class TitleCommand implements ICommand {
         }
         User user = userService.getOrCreateUser(target.getUser());
         Optional<Character> character = userService.getSelectedCharacter(user);
-        String initials = character.get().getFirstName().charAt(0) + "" + character.get().getLastName().charAt(0);
+        // I originally abbreviated this to the first letter of the first name and last names, but it was ugly.
+        // Hope that explains the strange variable name.
+        String initials = character.get().getFirstName() + " " + character.get().getLastName();
         List<Title> userTitles = titleService.getUserTitles(user);
         List<Title> characterTitles = titleService.getCharacterTitles(character.get());
         List<Title> titles = new ArrayList<>(userTitles);
         titles.addAll(characterTitles);
         if (titles.isEmpty()) {
-            event.getHook().editOriginal("Titles: None").queue();
+            if (event.getUser().equals(target.getUser())) {
+                sendPretty(event, "# Titles\nYou do not have any titles.", defaultEmbedProvider);
+            } else {
+                sendPretty(event, "# Titles\nThis user does not have any titles.", defaultEmbedProvider);
+            }
             return;
         }
         String titleIds = titles.stream().map(t -> {
             return "`" + t.getId() + "`: " + (t.getPrefix() != null ? t.getPrefix() : "") + initials
                     + (t.getSuffix() != null ? t.getSuffix() : "");
         }).collect(Collectors.joining("\n- "));
-        event.getHook().editOriginal("Titles: " + titleIds).queue();
+        EmbedBuilder embedBuilder = defaultEmbedProvider.getPrettyEmbedBuilder(event.getJDA().getSelfUser());
+        embedBuilder.setDescription("# Titles\n" + titleIds);
+        event.getHook().editOriginalEmbeds(embedBuilder.build()).queue();
     }
 
     private void executeAdminRefresh(SlashCommandInteractionEvent event) throws CommandException {
@@ -237,7 +247,7 @@ public class TitleCommand implements ICommand {
             return;
         }
         if (refreshUserNickname(member)) {
-            event.getHook().editOriginal("Nickname refreshed for " + member.getAsMention() + ".").queue();
+            sendPretty(event, "Nickname refreshed for " + member.getAsMention() + ".", defaultEmbedProvider);
             return;
         } else {
             sendError(event, "Failed to refresh nickname for " + member.getAsMention() + ", possibly due to a permission issue.\nIs the users role above the bots highest?", defaultEmbedProvider);
@@ -281,7 +291,7 @@ public class TitleCommand implements ICommand {
             return;
         }
         Title title = titleService.createTitle(prefix, suffix);
-        event.getHook().editOriginal("Title created with ID `" + title.getId() + "`.").queue();
+        sendPretty(event, "Title created, ID: `" + title.getId() + "`", defaultEmbedProvider);
     }
 
     private void executeAdminRemove(SlashCommandInteractionEvent event) throws CommandException {
@@ -295,7 +305,7 @@ public class TitleCommand implements ICommand {
             return;
         }
         titleService.deleteTitle(title.get());
-        event.getHook().editOriginal("Title deleted.").queue();
+        sendPretty(event, "Title deleted.", defaultEmbedProvider);
     }
 
     private void executeAdminList(SlashCommandInteractionEvent event) throws CommandException {
@@ -304,7 +314,7 @@ public class TitleCommand implements ICommand {
         }
         List<Title> titles = titleService.getAllTitles();
         if (titles.isEmpty()) {
-            event.getHook().editOriginal("Titles: None").queue();
+            sendPretty(event, "# Titles\nNo titles have been created (yet).", defaultEmbedProvider);
             return;
         }
         // TODO: Add pagination
@@ -312,7 +322,9 @@ public class TitleCommand implements ICommand {
             return "`" + t.getId() + "`: " + (t.getPrefix() != null ? t.getPrefix() : "") + "Firstname Lastname"
                     + (t.getSuffix() != null ? t.getSuffix() : "");
         }).collect(Collectors.joining("\n- "));
-        event.getHook().editOriginal("Titles: " + titleIds).queue();
+        EmbedBuilder embedBuilder = defaultEmbedProvider.getPrettyEmbedBuilder(event.getJDA().getSelfUser());
+        embedBuilder.setDescription("# Titles\n" + titleIds);
+        event.getHook().editOriginalEmbeds(embedBuilder.build()).queue();
     }
 
     private void executeAdminGrant(SlashCommandInteractionEvent event) throws CommandException {
@@ -339,7 +351,7 @@ public class TitleCommand implements ICommand {
         } else {
             titleService.grantTitle(user, title.get());
         }
-        event.getHook().editOriginal("Title granted.").queue();
+        sendPretty(event, "Title granted to " + member.getAsMention() + ".", defaultEmbedProvider);
     }
 
     private void executeAdminRevoke(SlashCommandInteractionEvent event) throws CommandException {
@@ -366,7 +378,7 @@ public class TitleCommand implements ICommand {
         } else {
             titleService.revokeTitle(user, title.get());
         }
-        event.getHook().editOriginal("Title revoked.").queue();
+        sendPretty(event, "Title revoked from " + member.getAsMention() + ".", defaultEmbedProvider);
     }
 
     private boolean replyWithErrorIfMissingPermission(SlashCommandInteractionEvent event, Member member,
