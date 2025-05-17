@@ -1,6 +1,9 @@
 package io.github.hyscript7.fvbot.commands;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.springframework.stereotype.Component;
@@ -8,16 +11,17 @@ import org.springframework.stereotype.Component;
 import io.github.hyscript7.fvbot.core.commands.ICommand;
 import io.github.hyscript7.fvbot.core.embeds.IEmbedProvider;
 import io.github.hyscript7.fvbot.core.exceptions.commands.CommandException;
+import io.github.hyscript7.fvbot.data.models.Character;
+import io.github.hyscript7.fvbot.data.models.User;
 import io.github.hyscript7.fvbot.services.CharacterService;
 import io.github.hyscript7.fvbot.services.InnateNameService;
 import io.github.hyscript7.fvbot.services.UserService;
-import io.github.hyscript7.fvbot.data.models.Character;
-import io.github.hyscript7.fvbot.data.models.User;
 import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.exceptions.HierarchyException;
+import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.SlashCommandData;
@@ -39,9 +43,9 @@ public class CharacterCommand implements ICommand {
 
     private static final String USER_OPTION_ARG_NAME = "user";
     private static final String USER_OPTION_ARG_DESCRIPTION = "User to list or manage titles of.";
-    private static final String TITLE_ID_OPTION_ARG_NAME = "id";
+    private static final String TITLE_ID_OPTION_ARG_NAME = "title_id";
     private static final String TITLE_ID_OPTION_ARG_DESCRIPTION = "Id of the title.";
-    private static final String CHARACTER_ID_OPTION_ARG_NAME = "id";
+    private static final String CHARACTER_ID_OPTION_ARG_NAME = "character_id";
     private static final String CHARACTER_ID_OPTION_ARG_DESCRIPTION = "Id of the character.";
     private static final String CHARACTER_INNATE_NAME_OPTION_ARG_NAME = "innate";
     private static final String CHARACTER_INNATE_NAME_OPTION_ARG_DESCRIPTION = "Innate name of the character.";
@@ -124,6 +128,21 @@ public class CharacterCommand implements ICommand {
                                                         CHARACTER_LEVEL_OPTION_ARG_DESCRIPTION, false)
                                                 .addOption(OptionType.STRING, TITLE_ID_OPTION_ARG_NAME,
                                                         TITLE_ID_OPTION_ARG_DESCRIPTION, false),
+                                        new SubcommandData("update", "Changes character data (by ID).").addOption(
+                                                OptionType.INTEGER, CHARACTER_ID_OPTION_ARG_NAME,
+                                                CHARACTER_ID_OPTION_ARG_DESCRIPTION, true)
+                                                .addOption(OptionType.STRING, CHARACTER_FIRSTNAME_OPTION_ARG_NAME,
+                                                        CHARACTER_FIRSTNAME_OPTION_ARG_DESCRIPTION, false)
+                                                .addOption(OptionType.STRING, CHARACTER_LASTNAME_OPTION_ARG_NAME,
+                                                        CHARACTER_LASTNAME_OPTION_ARG_DESCRIPTION, false)
+                                                .addOption(OptionType.STRING, CHARACTER_RESURRECTION_OPTION_ARG_NAME,
+                                                        CHARACTER_RESURRECTION_OPTION_ARG_DESCRIPTION, false)
+                                                .addOption(OptionType.INTEGER, CHARACTER_LEVEL_OPTION_ARG_NAME,
+                                                        CHARACTER_LEVEL_OPTION_ARG_DESCRIPTION, false)
+                                                .addOption(OptionType.STRING, TITLE_ID_OPTION_ARG_NAME,
+                                                        TITLE_ID_OPTION_ARG_DESCRIPTION, false)
+                                                .addOption(OptionType.STRING, CHARACTER_INNATE_NAME_OPTION_ARG_NAME,
+                                                        CHARACTER_INNATE_NAME_OPTION_ARG_DESCRIPTION, false),
                                         new SubcommandData("delete", "Deletes a character (by ID).").addOption(
                                                 OptionType.STRING, CHARACTER_ID_OPTION_ARG_NAME,
                                                 CHARACTER_ID_OPTION_ARG_DESCRIPTION, true)));
@@ -151,6 +170,7 @@ public class CharacterCommand implements ICommand {
                 case "delete" -> executeAdminDelete(event);
                 case "list" -> executeAdminList(event);
                 case "set" -> executeAdminSet(event);
+                case "update" -> executeAdminUpdate(event);
             }
         } else {
             // Makes sure the user has a character
@@ -301,30 +321,181 @@ public class CharacterCommand implements ICommand {
     }
 
     private void executeAdminList(SlashCommandInteractionEvent event) throws CommandException {
-        if (true) { // ! Remove this block
-            sendError(event, "This command is not implemented yet.", defaultEmbedProvider);
+        net.dv8tion.jda.api.entities.User discordUser;
+        if (event.getOptionsByName(USER_OPTION_ARG_NAME).isEmpty()) {
+            discordUser = event.getUser();
+        } else {
+            discordUser = event.getOption(USER_OPTION_ARG_NAME).getAsUser();
+        }
+        User user = userService.getOrCreateUser(discordUser);
+        List<Character> characters = characterService.getCharactersOfUser(user);
+        if (characters.isEmpty()) {
+            if (discordUser.equals(event.getUser())) {
+                sendError(event, "You don't have any characters.", defaultEmbedProvider);
+            } else {
+                sendError(event, user.getUsername() + " doesn't have any characters.", defaultEmbedProvider);
+            }
             return;
         }
+        Character currentCharacter = user.getCurrentCharacter();
+        if (currentCharacter == null) {
+            if (discordUser.equals(event.getUser())) {
+                sendError(event, "You don't have a character.", defaultEmbedProvider);
+            } else {
+                sendError(event, user.getUsername() + " doesn't have a character.", defaultEmbedProvider);
+            }
+            return;
+        }
+        EmbedBuilder embedBuilder = defaultEmbedProvider.getPrettyEmbedBuilder(event.getJDA().getSelfUser())
+                .setTitle("Characters of " + discordUser.getName());
+        StringBuilder stringBuilder = new StringBuilder();
+        for (Character character : characters) {
+            stringBuilder
+                    .append("\n- " + (currentCharacter.getInnateName().equals(character.getInnateName()) ? "**" : "")
+                            + character.getFullNameWithTitle() + " ("
+                            + character.getInnateName() + ") (ID: `" + character.getId()
+                            + "`)" + (currentCharacter.getInnateName().equals(character.getInnateName()) ? "**" : ""));
+        }
+        embedBuilder.setDescription(stringBuilder.toString().strip());
+        event.getHook().editOriginalEmbeds(embedBuilder.build()).queue();
     }
 
     private void executeAdminSet(SlashCommandInteractionEvent event) throws CommandException {
-        if (true) { // ! Remove this block
-            sendError(event, "This command is not implemented yet.", defaultEmbedProvider);
+        if (event.getOptionsByName(USER_OPTION_ARG_NAME).isEmpty()) {
+            sendError(event, "You must specify a user.", defaultEmbedProvider);
             return;
         }
+        net.dv8tion.jda.api.entities.User discordUser = event.getOption(USER_OPTION_ARG_NAME).getAsUser();
+        if (event.getOptionsByName(CHARACTER_ID_OPTION_ARG_NAME).isEmpty()) {
+            sendError(event, "You must specify a character ID.", defaultEmbedProvider);
+            return;
+        }
+        User user = userService.getOrCreateUser(discordUser);
+        Long characterId = event.getOption(CHARACTER_ID_OPTION_ARG_NAME).getAsLong();
+        Optional<Character> character = characterService.getCharacterById(characterId);
+        if (!character.isPresent()) {
+            sendError(event, "Character not found.", defaultEmbedProvider);
+            return;
+        }
+        if (!Objects.equals(character.get().getUser().getId(), user.getId())) {
+            sendError(event, "Character is not owned by the specified user.", defaultEmbedProvider);
+            return;
+        }
+        userService.setCurrentCharacter(user, character.get());
+        String nickname = character.get().discordFullName();
+        try {
+            event.getMember().modifyNickname(nickname).queue();
+        } catch (HierarchyException e) {
+            log.warn("Failed to change nickname of " + event.getMember().getId() + " to " + nickname
+                    + " (CharacterCommand)");
+        }
+        event.getHook().editOriginalEmbeds(defaultEmbedProvider.getPrettyEmbedBuilder(event.getJDA().getSelfUser())
+                .setDescription("Foreign character switched.").build()).queue();
     }
 
     private void executeAdminCreate(SlashCommandInteractionEvent event) throws CommandException {
-        if (true) { // ! Remove this block
-            sendError(event, "This command is not implemented yet.", defaultEmbedProvider);
-            return;
+        // This method is an absolute abomination and should be refactored
+        // I am sorry to anyone who needs to debug anything in here
+        net.dv8tion.jda.api.entities.User discordUser;
+        if (event.getOptionsByName(USER_OPTION_ARG_NAME).isEmpty()) {
+            discordUser = event.getUser();
+        } else {
+            discordUser = event.getOption(USER_OPTION_ARG_NAME).getAsUser();
         }
+        Map<String, OptionMapping> options = new HashMap<>();
+        String[] requiredOptions = new String[] { CHARACTER_FIRSTNAME_OPTION_ARG_NAME,
+                CHARACTER_LASTNAME_OPTION_ARG_NAME };
+        for (String optionNameString : requiredOptions) {
+            if (event.getOptionsByName(optionNameString).isEmpty()) {
+                sendError(event, "You must specify a " + optionNameString + ".", defaultEmbedProvider);
+                return;
+            }
+            options.put(optionNameString, event.getOption(optionNameString));
+        }
+        Map<String, Object> optionalOptions = new HashMap<>();
+        optionalOptions.put(CHARACTER_INNATE_NAME_OPTION_ARG_NAME,
+                event.getOptionsByName(CHARACTER_INNATE_NAME_OPTION_ARG_NAME).stream().map(OptionMapping::getAsString)
+                        .findFirst().orElseGet(() -> innateNameService.generateInnateName(RANDOM_INNATE_NAME_MIN_LENGTH,
+                                RANDOM_INNATE_NAME_MAX_LENGTH)));
+        optionalOptions.put(CHARACTER_LEVEL_OPTION_ARG_NAME, event.getOptionsByName(CHARACTER_LEVEL_OPTION_ARG_NAME)
+                .stream().map(OptionMapping::getAsInt).findFirst().orElse(1));
+        optionalOptions.put(CHARACTER_RESURRECTION_OPTION_ARG_NAME,
+                event.getOptionsByName(CHARACTER_RESURRECTION_OPTION_ARG_NAME).stream().map(OptionMapping::getAsInt)
+                        .findFirst().orElse(0));
+        String firstName = options.get(CHARACTER_FIRSTNAME_OPTION_ARG_NAME).getAsString();
+        String lastName = options.get(CHARACTER_LASTNAME_OPTION_ARG_NAME).getAsString();
+        String innateName = (String) optionalOptions.get(CHARACTER_INNATE_NAME_OPTION_ARG_NAME);
+        int level = (Integer) optionalOptions.get(CHARACTER_LEVEL_OPTION_ARG_NAME);
+        int resurrection = (Integer) optionalOptions.get(CHARACTER_RESURRECTION_OPTION_ARG_NAME);
+        User user = userService.getOrCreateUser(discordUser);
+        Character character = Character.builder().user(user).firstName(firstName).lastName(lastName)
+                .innateName(innateName).level(level).resurrection(resurrection).build();
+        characterService.createCharacter(user, character);
+        event.getHook().editOriginalEmbeds(defaultEmbedProvider.getPrettyEmbedBuilder(event.getJDA().getSelfUser())
+                .setDescription("Character created for " + discordUser.getName() + " with innate name `" + innateName
+                        + "` and ID `" + character.getId() + "`.")
+                .build()).queue();
     }
 
     private void executeAdminDelete(SlashCommandInteractionEvent event) throws CommandException {
-        if (true) { // ! Remove this block
-            sendError(event, "This command is not implemented yet.", defaultEmbedProvider);
+        if (event.getOptionsByName(CHARACTER_ID_OPTION_ARG_NAME).isEmpty()) {
+            sendError(event, "You must specify a character ID.", defaultEmbedProvider);
             return;
         }
+        Long characterId = event.getOption(CHARACTER_ID_OPTION_ARG_NAME).getAsLong();
+        Optional<Character> character = characterService.getCharacterById(characterId);
+        if (!character.isPresent()) {
+            sendError(event, "Character not found.", defaultEmbedProvider);
+            return;
+        }
+        // Check whether the character is equipped - We'd run into problems if it is.
+        if (Objects.equals(character.get().getUser().getCurrentCharacter().getId(), character.get().getId())) {
+            sendError(event, "You can't delete a currently selected character.", defaultEmbedProvider);
+            return;
+        }
+        characterService.deleteCharacter(character.get());
+        event.getHook().editOriginalEmbeds(defaultEmbedProvider.getPrettyEmbedBuilder(event.getJDA().getSelfUser())
+                .setDescription("Character with ID `" + characterId + "` deleted.").build()).queue();
+    }
+
+    private void executeAdminUpdate(SlashCommandInteractionEvent event) throws CommandException {
+        if (event.getOptionsByName(CHARACTER_ID_OPTION_ARG_NAME).isEmpty()) {
+            sendError(event, "You must specify a character ID.", defaultEmbedProvider);
+            return;
+        }
+        Long characterId = event.getOption(CHARACTER_ID_OPTION_ARG_NAME).getAsLong();
+        Character character = characterService.getCharacterById(characterId).orElseGet(null);
+        if (character == null) {
+            sendError(event, "Character not found.", defaultEmbedProvider);
+            return;
+        }
+        Map<String, Object> optionalOptions = new HashMap<>();
+        optionalOptions.put(CHARACTER_FIRSTNAME_OPTION_ARG_NAME,
+                event.getOptionsByName(CHARACTER_FIRSTNAME_OPTION_ARG_NAME).stream().map(OptionMapping::getAsString)
+                        .findFirst().orElse(character.getFirstName()));
+        optionalOptions.put(CHARACTER_LASTNAME_OPTION_ARG_NAME,
+                event.getOptionsByName(CHARACTER_LASTNAME_OPTION_ARG_NAME).stream().map(OptionMapping::getAsString)
+                        .findFirst().orElse(character.getLastName()));
+        optionalOptions.put(CHARACTER_INNATE_NAME_OPTION_ARG_NAME,
+                event.getOptionsByName(CHARACTER_INNATE_NAME_OPTION_ARG_NAME).stream().map(OptionMapping::getAsString)
+                        .findFirst().orElseGet(character::getInnateName));
+        optionalOptions.put(CHARACTER_LEVEL_OPTION_ARG_NAME, event.getOptionsByName(CHARACTER_LEVEL_OPTION_ARG_NAME)
+                .stream().map(OptionMapping::getAsInt).findFirst().orElse(character.getLevel()));
+        optionalOptions.put(CHARACTER_RESURRECTION_OPTION_ARG_NAME,
+                event.getOptionsByName(CHARACTER_RESURRECTION_OPTION_ARG_NAME).stream().map(OptionMapping::getAsInt)
+                        .findFirst().orElse(character.getResurrection()));
+        String firstName = (String) optionalOptions.get(CHARACTER_FIRSTNAME_OPTION_ARG_NAME);
+        String lastName = (String) optionalOptions.get(CHARACTER_LASTNAME_OPTION_ARG_NAME);
+        String innateName = (String) optionalOptions.get(CHARACTER_INNATE_NAME_OPTION_ARG_NAME);
+        int level = (Integer) optionalOptions.get(CHARACTER_LEVEL_OPTION_ARG_NAME);
+        int resurrection = (Integer) optionalOptions.get(CHARACTER_RESURRECTION_OPTION_ARG_NAME);
+        character.setFirstName(firstName);
+        character.setLastName(lastName);
+        character.setInnateName(innateName);
+        character.setLevel(level);
+        character.setResurrection(resurrection);
+        characterService.updateCharacter(character);
+        event.getHook().editOriginalEmbeds(defaultEmbedProvider.getPrettyEmbedBuilder(event.getJDA().getSelfUser())
+                .setDescription("Character with ID `" + characterId + "` updated.").build()).queue();
     }
 }
