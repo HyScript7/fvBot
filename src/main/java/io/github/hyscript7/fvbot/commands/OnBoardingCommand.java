@@ -69,6 +69,11 @@ public class OnBoardingCommand implements ICommand {
             sendError(event, "Member not found.", defaultEmbedProvider);
             return;
         }
+        if (!member.getUser().equals(event.getUser()) && !event.getMember().canInteract(member)) {
+                sendError(event, "You don't have permission to restart onboarding for this user.",
+                        defaultEmbedProvider);
+            }
+        
         User user = userService.getOrCreateUser(member.getUser());
         userService.setCurrentCharacter(user, null);
         userService.updateUser(user);
