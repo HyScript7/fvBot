@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.exceptions.HierarchyException;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.SlashCommandData;
@@ -250,11 +251,24 @@ public class CharacterCommand implements ICommand {
             }
             return;
         }
+        Character currentCharacter = user.getCurrentCharacter();
+        if (currentCharacter == null) {
+            if (discordUser.equals(event.getUser())) {
+                sendError(event, "You don't have a character.", defaultEmbedProvider);
+            } else {
+                sendError(event, user.getUsername() + " doesn't have a character.", defaultEmbedProvider);
+            }
+            return;
+        }
         EmbedBuilder embedBuilder = defaultEmbedProvider.getPrettyEmbedBuilder(event.getJDA().getSelfUser())
                 .setTitle("Characters of " + discordUser.getName());
         StringBuilder stringBuilder = new StringBuilder();
         for (Character character : characters) {
-            stringBuilder.append("\n" + character.getFullNameWithTitle() + " (" + character.getInnateName() + ")");
+            stringBuilder
+                    .append("\n- " + (currentCharacter.getInnateName().equals(character.getInnateName()) ? "**" : "")
+                            + character.getFullNameWithTitle() + " ("
+                            + (event.getUser().equals(discordUser) ? character.getInnateName() : character.getId())
+                            + ")" + (currentCharacter.getInnateName().equals(character.getInnateName()) ? "**" : ""));
         }
         embedBuilder.setDescription(stringBuilder.toString().strip());
         event.getHook().editOriginalEmbeds(embedBuilder.build()).queue();
@@ -276,7 +290,12 @@ public class CharacterCommand implements ICommand {
         }
         userService.setCurrentCharacter(user, character.get());
         String nickname = character.get().discordFullName();
-        event.getMember().modifyNickname(nickname).queue();
+        try {
+            event.getMember().modifyNickname(nickname).queue();
+        } catch (HierarchyException e) {
+            log.warn("Failed to change nickname of " + event.getMember().getId() + " to " + nickname
+                    + " (CharacterCommand)");
+        }
         event.getHook().editOriginalEmbeds(defaultEmbedProvider.getPrettyEmbedBuilder(event.getJDA().getSelfUser())
                 .setDescription("Character switched.").build()).queue();
     }
