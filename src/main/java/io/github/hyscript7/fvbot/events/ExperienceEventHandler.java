@@ -100,7 +100,8 @@ public class ExperienceEventHandler extends ListenerAdapter {
     }
 
     private double calculateExperienceForVoiceChat(Date joinDate, Date leaveDate) {
-        return (leaveDate.getTime() - joinDate.getTime()) / 1000d;
+        return ((leaveDate.getTime() - joinDate.getTime()) / 1000d) / 10d; // We're dividing by 10.0d meaning 10 seconds
+                                                                           // in VC = 1 ExP... I think.
     }
 
     private double calculateExperienceForMessage(int messageLength, Date lastMessageDate) {
