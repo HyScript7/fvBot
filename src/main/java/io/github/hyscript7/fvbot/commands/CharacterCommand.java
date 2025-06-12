@@ -15,10 +15,12 @@ import io.github.hyscript7.fvbot.data.models.Character;
 import io.github.hyscript7.fvbot.data.models.User;
 import io.github.hyscript7.fvbot.services.CharacterService;
 import io.github.hyscript7.fvbot.services.InnateNameService;
+import io.github.hyscript7.fvbot.services.LevelUpService;
 import io.github.hyscript7.fvbot.services.UserService;
 import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.Permission;
+import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.exceptions.HierarchyException;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
@@ -38,6 +40,9 @@ public class CharacterCommand implements ICommand {
 
     private final IEmbedProvider defaultEmbedProvider;
     private final UserService userService;
+
+    private final LevelUpService levelUpService;
+
     private static final String NAME = "character";
     private static final String DESCRIPTION = "Provides sub-commands for you to work with characters.";
 
@@ -62,11 +67,12 @@ public class CharacterCommand implements ICommand {
     private static final int RANDOM_INNATE_NAME_MAX_LENGTH = 9;
 
     CharacterCommand(IEmbedProvider defaultEmbedProvider, UserService userService, InnateNameService innateNameService,
-            CharacterService characterService) {
+            CharacterService characterService, LevelUpService levelUpService) {
         this.defaultEmbedProvider = defaultEmbedProvider;
         this.userService = userService;
         this.innateNameService = innateNameService;
         this.characterService = characterService;
+        this.levelUpService = levelUpService;
     }
 
     @Override
@@ -316,6 +322,7 @@ public class CharacterCommand implements ICommand {
             log.warn("Failed to change nickname of " + event.getMember().getId() + " to " + nickname
                     + " (CharacterCommand)");
         }
+        levelUpService.runNecessaryUpdates(event.getMember(), character.get());
         event.getHook().editOriginalEmbeds(defaultEmbedProvider.getPrettyEmbedBuilder(event.getJDA().getSelfUser())
                 .setDescription("Character switched.").build()).queue();
     }
@@ -383,14 +390,16 @@ public class CharacterCommand implements ICommand {
         }
         userService.setCurrentCharacter(user, character.get());
         String nickname = character.get().discordFullName();
+        Member discordMember = event.getOption(USER_OPTION_ARG_NAME).getAsMember();
         try {
-            event.getMember().modifyNickname(nickname).queue();
+            discordMember.modifyNickname(nickname).queue();
         } catch (HierarchyException e) {
-            log.warn("Failed to change nickname of " + event.getMember().getId() + " to " + nickname
+            log.warn("Failed to change nickname of " + discordMember.getId() + " to " + nickname
                     + " (CharacterCommand)");
         }
         event.getHook().editOriginalEmbeds(defaultEmbedProvider.getPrettyEmbedBuilder(event.getJDA().getSelfUser())
                 .setDescription("Foreign character switched.").build()).queue();
+        levelUpService.runNecessaryUpdates(discordMember, character.get());
     }
 
     private void executeAdminCreate(SlashCommandInteractionEvent event) throws CommandException {
