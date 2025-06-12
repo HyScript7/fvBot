@@ -1,6 +1,7 @@
 package io.github.hyscript7.fvbot.events;
 
 import java.util.Date;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -9,11 +10,10 @@ import javax.annotation.Nonnull;
 import org.springframework.stereotype.Component;
 
 import io.github.hyscript7.fvbot.data.models.Character;
-import io.github.hyscript7.fvbot.services.CharacterService;
-import io.github.hyscript7.fvbot.services.FvBotConfigurationService;
-import io.github.hyscript7.fvbot.services.LevelUpService;
-import io.github.hyscript7.fvbot.services.UserService;
+import io.github.hyscript7.fvbot.services.*;
 import lombok.extern.slf4j.Slf4j;
+import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.events.guild.voice.GuildVoiceUpdateEvent;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
@@ -21,6 +21,8 @@ import net.dv8tion.jda.api.hooks.ListenerAdapter;
 @Component
 @Slf4j
 public class ExperienceEventHandler extends ListenerAdapter {
+
+    private final LevelRoleService levelRoleService;
 
     private final LevelUpService levelUpService;
 
@@ -49,13 +51,14 @@ public class ExperienceEventHandler extends ListenerAdapter {
     private static final double MULTIPLIER_MORE_THAN_ONE_DAY = 0.75;
 
     ExperienceEventHandler(FvBotConfigurationService fvBotConfigurationService, UserService userService,
-            CharacterService characterService, LevelUpService levelUpService) {
+            CharacterService characterService, LevelUpService levelUpService, LevelRoleService levelRoleService) {
         this.fvBotConfigurationService = fvBotConfigurationService;
         this.userService = userService;
         this.characterService = characterService;
         this.voiceChannelMap = new ConcurrentHashMap<>();
         this.lastMessageMap = new ConcurrentHashMap<>();
         this.levelUpService = levelUpService;
+        this.levelRoleService = levelRoleService;
     }
 
     @Override
@@ -74,13 +77,7 @@ public class ExperienceEventHandler extends ListenerAdapter {
                     lastMessageDate);
             lastMessageMap.put(event.getAuthor().getIdLong(), new Date());
             character.setExperience(character.getExperience() + messageExperience);
-            int levelBeforeUpdate = character.getLevel();
-            levelUpService.performEligibleLevelUps(character);
-            characterService.updateCharacter(character);
-            if (levelBeforeUpdate != character.getLevel()) {
-                log.info("Character {} has leveled up to level {}!", character.getFullNameWithTitle(),
-                        character.getLevel());
-            }
+            runNecessaryUpdates(event.getMember(), character);
         }
     }
 
@@ -93,15 +90,9 @@ public class ExperienceEventHandler extends ListenerAdapter {
                 Character character = userService
                         .getSelectedCharacter(userService.getOrCreateUser(event.getMember().getUser())).orElse(null);
                 if (character != null) {
-                    int levelBeforeUpdate = character.getLevel();
                     character.setExperience(
                             character.getExperience() + calculateExperienceForVoiceChat(joinDate, new Date()));
-                    levelUpService.performEligibleLevelUps(character);
-                    characterService.updateCharacter(character);
-                    if (levelBeforeUpdate != character.getLevel()) {
-                        log.info("Character {} has leveled up to level {}!", character.getFullNameWithTitle(),
-                                character.getLevel());
-                    }
+                    runNecessaryUpdates(event.getMember(), character);
                 }
                 voiceChannelMap.remove(event.getMember().getIdLong());
             }
@@ -135,6 +126,23 @@ public class ExperienceEventHandler extends ListenerAdapter {
             }
         }
         return messageExperience;
+    }
+
+    private void runNecessaryUpdates(Member member, Character character) {
+        int levelBeforeUpdate = character.getLevel();
+        levelUpService.performEligibleLevelUps(character);
+        characterService.updateCharacter(character);
+        if (levelBeforeUpdate != character.getLevel()) {
+            log.info("Character {} has leveled up to level {}!", character.getFullNameWithTitle(),
+                    character.getLevel());
+            // Update roles
+            List<Role> levelRoles = levelRoleService.getLevelRoles(member); // The roles the user is supposed to have
+            List<Role> allLevelRoles = levelRoleService.getAllLevelRoles(member.getGuild()); // All level roles
+            List<Role> newMemberRoles = member.getRoles().stream()
+                    .filter(r -> !allLevelRoles.contains(r) || (allLevelRoles.contains(r) && levelRoles.contains(r)))
+                    .toList(); // The member's new (complete) role list
+            member.getGuild().modifyMemberRoles(member, newMemberRoles).queue();
+        }
     }
 
 }
