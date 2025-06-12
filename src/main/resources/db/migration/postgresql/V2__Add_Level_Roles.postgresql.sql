@@ -4,7 +4,7 @@ Migration Script
  */
 -- Tables
 CREATE TABLE
-    IF NOT EXISTS "levelrole" (
+    IF NOT EXISTS "level_role" (
         "id" BIGSERIAL PRIMARY KEY,
         "guild_id" BIGINT,
         "role_id" BIGINT UNIQUE,
