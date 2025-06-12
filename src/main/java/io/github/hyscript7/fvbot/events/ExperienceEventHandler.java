@@ -5,8 +5,6 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import javax.annotation.Nonnull;
-
 import org.springframework.stereotype.Component;
 
 import io.github.hyscript7.fvbot.data.models.Character;
@@ -62,7 +60,7 @@ public class ExperienceEventHandler extends ListenerAdapter {
     }
 
     @Override
-    public void onMessageReceived(@Nonnull MessageReceivedEvent event) {
+    public void onMessageReceived(MessageReceivedEvent event) {
         if (event.getGuild().getIdLong() != fvBotConfigurationService.getGuildId()) {
             return;
         }
@@ -82,7 +80,7 @@ public class ExperienceEventHandler extends ListenerAdapter {
     }
 
     @Override
-    public void onGuildVoiceUpdate(@Nonnull GuildVoiceUpdateEvent event) {
+    public void onGuildVoiceUpdate(GuildVoiceUpdateEvent event) {
         if (event.getOldValue() != null && event.getNewValue() == null) {
             Date joinDate = voiceChannelMap.get(event.getMember().getIdLong());
             if (joinDate != null) {
